@@ -1,6 +1,13 @@
 # VoxelProject
 3D Voxel Game Project
 
+Generating Docs
+
+Doxygen 1.8.7 is being used to generate the documentation files. In order to perform this operating, place
+doxygen.exe in the root folder where doxyconf.cfg is located and run
+
+doxygen doxyconf.cfg
+
 Building Binaries
 
 CMake 3.3 was used to build the binary files. Point the source directory to the folder containing CMakeLists.txt, and the binaries directory
