@@ -1,6 +1,6 @@
 /**
 * @file logger.h
-* @brief Defines the CLogger class
+* @brief Defines the CLogger class.
 *
 * @author Timothy Volpe
 *
@@ -13,6 +13,7 @@
 #include <queue>
 #include <boost\format.hpp>
 
+/** Rough interval at which the log entries are flushed to the log file, in milliseconds */
 #define FLUSH_INTERVAL_MS 5000
 
 /**
@@ -154,7 +155,7 @@ public:
 
 	/**
 	* @brief Determines if it is neccessary to flush or not.
-	* @detail If the internal specified by FLUSH_INTERVAL_MS has elapsed, the log entries are flushed to the file
+	* @details If the internal specified by #FLUSH_INTERVAL_MS has elapsed, the log entries are flushed to the file
 	* @return Returns true if file write was successful, false otherwise
 	* @author Timothy Volpe
 	* @date 12/10/2019
@@ -220,7 +221,7 @@ public:
 
 	/**
 	* @brief Displays the appropriate fatal error message box.
-	* @detail This function is blocking, so it should only be used if the game is about to exit
+	* @details This function is blocking, so it should only be used if the game is about to exit
 	*	such as is in the case of a fatal error.
 	* @param[in]	format	The message box contents format
 	* @param[in]	args	Variable arguments to be inserted into formatStr
@@ -229,6 +230,6 @@ public:
 	*/
 	template<typename... Args>
 	void fatalMessageBox( std::string format, Args... args ) {
-		std::cout << "Show Message Box\n"
+		std::cout << "Show Message Box\n";
 	}
 };

@@ -1,12 +1,3 @@
-/**
-* @file logger.cpp
-* @brief Contains the CLogger class
-*
-* @author Timothy Volpe
-*
-* @date 12/10/2019
-*/
-
 #include "logger.h"
 
 CLogger::CLogger() {

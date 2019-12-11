@@ -1,6 +1,6 @@
 /**
 * @file game.h
-* @brief Defines the CGame class
+* @brief Defines the CGame class.
 *
 * @author Timothy Volpe
 *
@@ -10,6 +10,7 @@
 #pragma once
 
 class CLogger;
+class CFilesystem;
 
 /**
 * @brief The main game class, everything starts and ends here.
@@ -24,6 +25,7 @@ class CGame
 {
 private:
 	CLogger* m_pLogger;
+	CFilesystem *m_pFilesystem;
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.

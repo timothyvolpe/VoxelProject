@@ -17,7 +17,7 @@ After CMake has been configured, the required libraries which were not detected 
 variable. The list of required libraries and their verions is listed below.
 
 Finally, if using Visual Studio, make sure to set the startup project to the main project, not ALL_BUILD, or you will get an error
-when trying to debug!
+when trying to debug! Additionally, you will likely need to change the debugging Working Directory to point to the executable output directory.
 
 Libaries
 

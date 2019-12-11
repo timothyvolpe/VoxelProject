@@ -34,13 +34,6 @@ include_directories( "${PROJECT_SOURCE_DIR}/include" )
 # Project Source Files
 file( GLOB Project_SRC "${PROJECT_SOURCE_DIR}/src/*.cpp" )
 
-# Executable File to Generate
-add_executable( ${ProjectName} ${Project_INC} ${Project_SRC} )
-
-#########################################
-############### Libraries ###############
-#########################################
-
 #########
 # Boost #
 #########
@@ -59,3 +52,20 @@ if( EXISTS ${BOOST_LIBRARY_DIR} )
 else()
 	message( FATAL_ERROR "BOOST_LIBRARY_DIR was not a valid directory." )
 endif()
+
+# Executable File to Generate
+add_executable( ${ProjectName} ${Project_INC} ${Project_SRC} )
+
+if( MSVC )
+	set_target_properties( ${ProjectName} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/debug" )
+	
+	if(${CMAKE_VERSION} VERSION_LESS "3.8.0") 
+		message( "Be sure to change the Debugger Working Directory in the generated solution to point to the build folder!" )
+	endif()
+endif()
+
+#########################################
+############### Libraries ###############
+#########################################
+
+
