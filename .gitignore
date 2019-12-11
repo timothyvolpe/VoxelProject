@@ -30,6 +30,7 @@ $RECYCLE.BIN/
 *.exe
 
 build/
+docs/
 
 # =========================
 # Operating System Files

@@ -21,8 +21,18 @@ endforeach()
 # Definitons
 ADD_DEFINITIONS( -DUNICODE )
 ADD_DEFINITIONS( -D_UNICODE )
-ADD_DEFINITIONS( -DWIN32 )
 #ADD_DEFINITIONS( -DGLEW_STATIC )
 #ADD_DEFINITIONS( -DSDL_MAIN_HANDLED )
 #ADD_DEFINITIONS( -D_CRT_SECURE_NO_WARNINGS )
 #ADD_DEFINITIONS( -D_SCL_SECURE_NO_WARNINGS )
+
+# Project Include Files
+file( GLOB Project_INC "${PROJECT_SOURCE_DIR}/include/*.h" )
+# Include Path
+include_directories( "${PROJECT_SOURCE_DIR}/include" )
+
+# Project Source Files
+file( GLOB Project_SRC "${PROJECT_SOURCE_DIR}/src/*.cpp" )
+
+# Executable File to Generate
+add_executable( ${ProjectName} ${Project_INC} ${Project_SRC} )
