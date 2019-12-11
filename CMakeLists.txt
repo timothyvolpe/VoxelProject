@@ -36,3 +36,26 @@ file( GLOB Project_SRC "${PROJECT_SOURCE_DIR}/src/*.cpp" )
 
 # Executable File to Generate
 add_executable( ${ProjectName} ${Project_INC} ${Project_SRC} )
+
+#########################################
+############### Libraries ###############
+#########################################
+
+#########
+# Boost #
+#########
+
+set( BOOST_INCLUDE_DIR "BOOST_INCLUDE_DIR-NOTFOUND" CACHE PATH "" )
+set( BOOST_LIBRARY_DIR "BOOST_INCLUDE_DIR-NOTFOUND" CACHE PATH "" )
+
+if( EXISTS ${BOOST_INCLUDE_DIR} )
+	include_directories( ${BOOST_INCLUDE_DIR} )
+else()
+	message( FATAL_ERROR "BOOST_INCLUDE_DIR was not a valid directory." )
+endif()
+
+if( EXISTS ${BOOST_LIBRARY_DIR} )
+	link_directories( ${BOOST_LIBRARY_DIR} )
+else()
+	message( FATAL_ERROR "BOOST_LIBRARY_DIR was not a valid directory." )
+endif()
