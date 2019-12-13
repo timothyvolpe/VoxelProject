@@ -9,12 +9,19 @@
 
 #pragma once
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <queue>
 #include <boost\format.hpp>
 
-/** Rough interval at which the log entries are flushed to the log file, in milliseconds */
-#define FLUSH_INTERVAL_MS 5000
+#ifdef WIN32
+#include <Windows.h>
+#endif
+
+#include "def.h"
+
+/** Rough interval at which the log entries are flushed to the log file, in seconds */
+#define FLUSH_INTERVAL 5.0
 
 /**
 * @brief Message logger class for debugging and general information.
@@ -49,6 +56,9 @@ private:
 	};
 
 	std::queue<std::string> m_logEntryQueue;
+	double m_timeSinceLastFlush;
+
+	std::ofstream m_logFile;
 
 	/**
 	* @brief Print formatted helper function
@@ -156,11 +166,12 @@ public:
 	/**
 	* @brief Determines if it is neccessary to flush or not.
 	* @details If the internal specified by #FLUSH_INTERVAL_MS has elapsed, the log entries are flushed to the file
+	* @param[in]	elapsedTime	The time elapsed since the last update time, in seconds
 	* @return Returns true if file write was successful, false otherwise
 	* @author Timothy Volpe
 	* @date 12/10/2019
 	*/
-	bool update();
+	bool update( double elapsedTime );
 
 	/**
 	* @brief Print and log informational message with newline character.
@@ -229,7 +240,18 @@ public:
 	* @date 12/10/2019
 	*/
 	template<typename... Args>
-	void fatalMessageBox( std::string format, Args... args ) {
-		std::cout << "Show Message Box\n";
+	void fatalMessageBox( std::string format, Args... args )
+	{
+		// use boost format
+		std::wstring wideFormat( format.begin(), format.end() );
+		boost::wformat formatter( wideFormat );
+		using unroll = int[]; unroll{ 0, (formatter % std::forward<Args>( args ), 0)... };
+		std::string boxTitle = GAME_TITLE;
+		std::wstring wideTitle( boxTitle.begin(), boxTitle.end() );
+
+		// show platform dependant messagebox
+#ifdef WIN32
+		::MessageBox( NULL, boost::str( formatter ).c_str(), wideTitle.c_str(), MB_OK | MB_ICONERROR );
+#endif
 	}
 };

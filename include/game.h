@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <chrono>
+
 class CLogger;
 class CFilesystem;
 
@@ -24,8 +26,34 @@ class CFilesystem;
 class CGame
 {
 private:
+	bool m_bRunning;
+
 	CLogger* m_pLogger;
 	CFilesystem *m_pFilesystem;
+
+	/** The frame time, recorded at the beginning of the frame */
+	long long m_currentTimeUs;
+	/** The time of the beginning of the last frame */
+	long long m_lastFrameUs;
+	/** The length of the last frame in seconds */
+	double m_lastFrameTimeSeconds;
+
+	/**
+	* @brief Main update function.
+	* @details Handles updating all the game entities and objects, should be run before rendering
+	* @return Returns true if the update was successful, false otherwise.
+	* @author Timothy Volpe
+	* @date 12/12/2019
+	*/
+	bool update();
+	/**
+	* @brief Main render function.
+	* @details Handles render all the game entities, should be run after updating
+	* @return Returns true if the render was successful, false otherwise.
+	* @author Timothy Volpe
+	* @date 12/12/2019
+	*/
+	bool render();
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.
@@ -58,10 +86,27 @@ public:
 	void destroy();
 
 	/**
+	* @brief Starts the game loop
+	* @details The game loop handles rendering everything, updating objects and entities, io, networking, everything.
+	*	It should be called in the main function. This will block until the game is finished executing.
+	* @return Returns true if the game exits normally, false if there was an error.
+	* @author Timothy Volpe
+	* @date 12/11/2019
+	*/
+	bool startGame();
+
+	/**
 	* @brief Returns the logger object, which is owned by the game class.
 	* @return Returns the logger object, which should not be deleted.
 	* @author Timothy Volpe
 	* @date 12/10/2019
 	*/
 	CLogger* getLogger();
+
+	/**
+	* @brief Returns the last frame time in seconds
+	* @details This is the time it took for the last frame to execute, recorded from the beginning of the last
+	*	frame to the start of the current frame. It is constant throughout the entire active frame.
+	*/
+	double getFrameTime();
 };

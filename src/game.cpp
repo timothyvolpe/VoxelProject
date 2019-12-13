@@ -2,9 +2,16 @@
 #include "logger.h"
 #include "filesystem.h"
 
-CGame::CGame() {
+CGame::CGame()
+{
+	m_bRunning = false;
+
 	m_pLogger = 0;
 	m_pFilesystem = 0;
+
+	m_currentTimeUs = 0;
+	m_lastFrameUs = 0;
+	m_lastFrameTimeSeconds = 0;
 }
 CGame::~CGame() {
 }
@@ -15,9 +22,13 @@ bool CGame::initialize()
 	if( !m_pLogger->start() )
 		return false;
 
-	m_pFilesystem = new CFilesystem();
+	m_pFilesystem = new CFilesystem( m_pLogger );
 	if( !m_pFilesystem->verifyFilesystem() )
 		return false;
+
+	// so that the frame time isnt huge or 0
+	auto curtime = std::chrono::high_resolution_clock::now().time_since_epoch();
+	m_lastFrameUs = std::chrono::duration_cast<std::chrono::microseconds>(curtime).count();
 
 	return true;
 }
@@ -34,6 +45,44 @@ void CGame::destroy()
 	}
 }
 
+bool CGame::update()
+{
+	// update ...
+
+	m_pLogger->update( this->getFrameTime() );
+
+	return true;
+}
+
+bool CGame::render()
+{
+	return true;
+}
+
+bool CGame::startGame()
+{
+	m_bRunning = true;
+
+	while( m_bRunning )
+	{
+		// Calculate time elapsed since last frame
+		auto curtime = std::chrono::high_resolution_clock::now().time_since_epoch();
+		m_currentTimeUs = std::chrono::duration_cast<std::chrono::microseconds>(curtime).count();
+		m_lastFrameTimeSeconds = (m_currentTimeUs - m_lastFrameTimeSeconds) * 1000000;
+
+		if( !this->update() )
+			return false;
+		if( !this->render() )
+			return false;
+	}
+
+	return true;
+}
+
 CLogger* CGame::getLogger() {
 	return m_pLogger;
+}
+
+double CGame::getFrameTime() {
+	return m_lastFrameTimeSeconds;
 }

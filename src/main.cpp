@@ -14,7 +14,10 @@ int main( int argc, char *argv[] )
 	game.getLogger()->printError( "Hello World %d %d %s", 1, 2, "yes" );
 	game.getLogger()->printLua( "Hello World %d %d %s", 1, 2, "yes" );
 	game.getLogger()->printLuaError( "Hello World %d %d %s", 1, 2, "yes" );
-	game.getLogger()->fatalMessageBox( "Fuck" );
+	game.getLogger()->fatalMessageBox( "This is an error message\n%s", "Hello World Error" );
+
+	// Start the game!
+	//game.startGame();
 
 	game.destroy();
 

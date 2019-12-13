@@ -13,6 +13,11 @@
 #include <vector>
 #include <boost/filesystem.hpp>
 
+/** Defines the location for the logger output */
+#define FILEPATH_LOGFILE "console.log"
+
+class CLogger;
+
 /**
 * @brief Filesystem handler class for the game
 * @details This class handles the general filesystem tasks that the game needs to perform. That includes
@@ -24,6 +29,8 @@
 */
 class CFilesystem
 {
+private:
+	CLogger *m_pLoggerHandle;
 public:
 	/** List of directories that are required. Created in order, so parents should be before nested directories. */
 	const std::vector<std::string> RequiredDirectories = { 
@@ -35,7 +42,8 @@ public:
 		"sounds",
 		"data",
 		"data/shaders",
-		"data/localization"
+		"data/localization",
+		"models"
 	};
 
 	/**
@@ -43,7 +51,7 @@ public:
 	* @author Timothy Volpe
 	* @date 12/11/2019
 	*/
-	CFilesystem();
+	CFilesystem( CLogger *pLogger );
 	/**
 	* @brief Destructor. Deletes all pointers.
 	* @author Timothy Volpe
