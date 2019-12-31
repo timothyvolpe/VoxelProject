@@ -28,11 +28,18 @@ ADD_DEFINITIONS( -D_UNICODE )
 
 # Project Include Files
 file( GLOB Project_INC "${PROJECT_SOURCE_DIR}/include/*.h" )
+file( GLOB Project_INC_GFX "${PROJECT_SOURCE_DIR}/include/gfx/*.h" )
 # Include Path
 include_directories( "${PROJECT_SOURCE_DIR}/include" )
 
 # Project Source Files
 file( GLOB Project_SRC "${PROJECT_SOURCE_DIR}/src/*.cpp" )
+file( GLOB Project_SRC_GFX "${PROJECT_SOURCE_DIR}/src/gfx/*.cpp" )
+
+# Project File Filters
+source_group( "Header Files\\gfx" FILES ${Project_INC_GFX} )
+
+source_group( "Source Files\\gfx" FILES ${Project_SRC_GFX} )
 
 #########
 # Boost #
@@ -54,7 +61,7 @@ else()
 endif()
 
 # Executable File to Generate
-add_executable( ${ProjectName} ${Project_INC} ${Project_SRC} )
+add_executable( ${ProjectName} ${Project_INC} ${Project_INC_GFX} ${Project_SRC} ${Project_SRC_GFX} )
 
 if( MSVC )
 	set_target_properties( ${ProjectName} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/debug" )
@@ -67,5 +74,36 @@ endif()
 #########################################
 ############### Libraries ###############
 #########################################
+
+# SDL (2.0.3)
+
+set( SDL2_INCLUDE_DIR "SDL2_INCLUDE_DIR-NOTFOUND" CACHE PATH "" )
+set( SDL2_LIBRARY "SDL2_LIBRARY-NOTFOUND" CACHE PATH "" )
+set( SDL2_LIBRARY_DEBUG "SDL2_LIBRARY_DEBUG-OPTIONAL-NOTFOUND" CACHE PATH "" )
+set( SDL2_MAIN "SDL2_MAIN-NOTFOUND" CACHE PATH "" )
+set( SDL2_MAIN_DEBUG "SDL2_MAIN_DEBUG-OPTIONAL-NOTFOUND" CACHE PATH "" )
+if( EXISTS ${SDL2_INCLUDE_DIR} )
+	include_directories( ${SDL2_INCLUDE_DIR} )
+else()
+	message( FATAL_ERROR "Invalid SDL2_INCLUDE_DIR." )
+endif()
+if( EXISTS ${SDL2_LIBRARY} )
+	if( EXISTS ${SDL2_LIBRARY_DEBUG} )
+		target_link_libraries( ${ProjectName} optimized ${SDL2_LIBRARY} debug ${SDL2_LIBRARY_DEBUG} )
+	else()
+		target_link_libraries( ${ProjectName} ${SDL2_LIBRARY} )
+	endif()
+else()
+	message( FATAL_ERROR "Invalid SDL2_LIBRARY file" )
+endif()
+if( EXISTS ${SDL2_MAIN} )
+	if( EXISTS ${SDL2_MAIN_DEBUG} )
+		target_link_libraries( ${ProjectName} optimized ${SDL2_MAIN} debug ${SDL2_MAIN_DEBUG} )
+	else()
+		target_link_libraries( ${ProjectName} ${SDL2_MAIN} )
+	endif()
+else()
+	message( FATAL_ERROR "Invalid SDL2_MAIN file" )
+endif()
 
 

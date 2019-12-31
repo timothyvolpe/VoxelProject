@@ -9,13 +9,6 @@ int main( int argc, char *argv[] )
 	if( !game.initialize() )
 		return 1;
 
-	game.getLogger()->print( "Hello World %d %d %s", 1, 2, "yes" );
-	game.getLogger()->printWarn( "Hello World %d %d %s", 1, 2, "yes" );
-	game.getLogger()->printError( "Hello World %d %d %s", 1, 2, "yes" );
-	game.getLogger()->printLua( "Hello World %d %d %s", 1, 2, "yes" );
-	game.getLogger()->printLuaError( "Hello World %d %d %s", 1, 2, "yes" );
-	game.getLogger()->fatalMessageBox( "This is an error message\n%s", "Hello World Error" );
-
 	// Start the game!
 	//game.startGame();
 

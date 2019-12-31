@@ -11,8 +11,14 @@
 
 #include <chrono>
 
+#define GAME_VERSION_MAJOR 0
+#define GAME_VERSION_MINOR 1
+#define GAME_VERSION_BUILD 1
+
 class CLogger;
 class CFilesystem;
+
+class CClient;
 
 /**
 * @brief The main game class, everything starts and ends here.
@@ -31,29 +37,14 @@ private:
 	CLogger* m_pLogger;
 	CFilesystem *m_pFilesystem;
 
+	CClient *m_pClient;
+
 	/** The frame time, recorded at the beginning of the frame */
 	long long m_currentTimeUs;
 	/** The time of the beginning of the last frame */
 	long long m_lastFrameUs;
 	/** The length of the last frame in seconds */
 	double m_lastFrameTimeSeconds;
-
-	/**
-	* @brief Main update function.
-	* @details Handles updating all the game entities and objects, should be run before rendering
-	* @return Returns true if the update was successful, false otherwise.
-	* @author Timothy Volpe
-	* @date 12/12/2019
-	*/
-	bool update();
-	/**
-	* @brief Main render function.
-	* @details Handles render all the game entities, should be run after updating
-	* @return Returns true if the render was successful, false otherwise.
-	* @author Timothy Volpe
-	* @date 12/12/2019
-	*/
-	bool render();
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.
@@ -72,7 +63,7 @@ public:
 
 	/**
 	* @brief Initializes the game class. Creates and initializes game objects.
-	* @return True is successfully initialized, False if otherwise. Error messagebox will be displayed,
+	* @return True if successfully initialized, false if otherwise. Error messagebox will be displayed,
 	*		with associated log output.
 	* @author Timothy Volpe
 	* @date 12/10/2019
@@ -102,6 +93,20 @@ public:
 	* @date 12/10/2019
 	*/
 	CLogger* getLogger();
+	/**
+	* @brief Returns the filesystem object, which is owned by the game class.
+	* @return Returns the filesystem object, which should not be deleted.
+	* @author Timothy Volpe
+	* @date 12/15/2019
+	*/
+	CFilesystem* getFilesystem();
+	/**
+	* @brief Returns the client object, which is owned by the game class.
+	* @return Returns the client object, which should not be deleted.
+	* @author Timothy Volpe
+	* @date 12/15/2019
+	*/
+	CClient* getClient();
 
 	/**
 	* @brief Returns the last frame time in seconds
