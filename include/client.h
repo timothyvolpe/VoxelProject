@@ -11,6 +11,7 @@
 
 class CGame;
 class CGraphics;
+class CConfig;
 
 /**
 * @brief The client-sided handler.
@@ -26,6 +27,13 @@ private:
 	CGame *m_pGameHandle;
 
 	CGraphics *m_pGraphics;
+	CConfig *m_pConfig;
+
+	unsigned int m_clientConfigIndex;
+
+	void handleSDLEvents();
+
+	bool loadConfigs();
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.

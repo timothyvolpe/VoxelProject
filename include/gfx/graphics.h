@@ -12,7 +12,6 @@
 #include <SDL.h>
 
 class CGame;
-class CWindow;
 
 /**
 * @brief The graphics handler.
@@ -25,9 +24,11 @@ class CWindow;
 class CGraphics
 {
 private:
+	static int SDLReferenceCount;
+
 	CGame *m_pGameHandle;
-	
-	CWindow *m_pWindow;
+
+	SDL_Window *m_pSDLWindow;
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.

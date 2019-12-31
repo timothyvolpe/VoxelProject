@@ -84,6 +84,10 @@ bool CGame::startGame()
 
 	return true;
 }
+void CGame::quitGame() {
+	this->m_bRunning = false;
+	m_pLogger->print( "Quitting..." );
+}
 
 CLogger* CGame::getLogger() {
 	return m_pLogger;

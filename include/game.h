@@ -13,7 +13,7 @@
 
 #define GAME_VERSION_MAJOR 0
 #define GAME_VERSION_MINOR 1
-#define GAME_VERSION_BUILD 1
+#define GAME_VERSION_BUILD 2
 
 class CLogger;
 class CFilesystem;
@@ -85,6 +85,11 @@ public:
 	* @date 12/11/2019
 	*/
 	bool startGame();
+	/**
+	* @brief Finishes current frame then begins shutdown procedure
+	* @details All this does is change the running flag to false, it does not interrupt any one-frame operations.
+	*/
+	void quitGame();
 
 	/**
 	* @brief Returns the logger object, which is owned by the game class.

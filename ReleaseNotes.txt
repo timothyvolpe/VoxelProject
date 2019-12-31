@@ -3,3 +3,7 @@ Version 0.1.1 Release:
 -Added CClient and CServer classes
 -Added CGraphics class
 -Added CWindow class
+
+Version 0.1.2
+-Removed unnecessary CWindow class and moved SDL window to CGraphics
+-Added config files

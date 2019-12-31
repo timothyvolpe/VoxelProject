@@ -22,3 +22,10 @@ when trying to debug! Additionally, you will likely need to change the debugging
 Libaries
 
 Boost 1.59.0 x64
+
+
+Requires Microsoft Visual Studio Redistributable 2015 (x64)
+
+Notes for Compiling SDL:
+For release builds, had to change runtime library to Multi-threaded DLL (/MD)
+Had to add vcruntimed.lib, ucrtd.lib to SDL project dependencies for debug build

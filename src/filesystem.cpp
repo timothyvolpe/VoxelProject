@@ -13,9 +13,9 @@ bool CFilesystem::verifyFilesystem()
 	try
 	{
 		for( auto it = RequiredDirectories.begin(); it != RequiredDirectories.end(); it++ ) {
-			if( !boost::filesystem::exists( (*it) ) || !boost::filesystem::is_directory( (*it) ) ) {
-				m_pLoggerHandle->print( "Creating directory %s", (*it).c_str() );
-				boost::filesystem::create_directory( (*it) );
+			if( !boost::filesystem::exists( it->second ) || !boost::filesystem::is_directory( it->second ) ) {
+				m_pLoggerHandle->print( "Creating directory %s", it->second.c_str() );
+				boost::filesystem::create_directory( it->second );
 			}
 		}
 	}
@@ -24,4 +24,17 @@ bool CFilesystem::verifyFilesystem()
 		return false;
 	}
 	return true;
+}
+
+boost::filesystem::path CFilesystem::getGamePath( FilesystemLocations location, std::string relativePath )
+{
+	auto kvPair = RequiredDirectories.find( location );
+	boost::filesystem::path usablePath;
+
+	assert( kvPair != RequiredDirectories.end() );
+
+	usablePath = kvPair->second;
+	usablePath /= relativePath;
+
+	return usablePath;
 }
