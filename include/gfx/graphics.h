@@ -33,6 +33,7 @@ class CGraphics
 {
 private:
 	static int SDLReferenceCount;
+	static bool GLEWInitialized;
 
 	CGame *m_pGameHandle;
 

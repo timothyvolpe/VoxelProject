@@ -7,6 +7,7 @@
 #include "client.h"
 
 int CGraphics::SDLReferenceCount = 0;
+bool CGraphics::GLEWInitialized = false;
 
 CGraphics::CGraphics( CGame *pGameHandle ) {
 	m_pGameHandle = pGameHandle;
@@ -18,7 +19,9 @@ CGraphics::~CGraphics() {
 
 bool CGraphics::initialize()
 {
+	SDL_version sdlVersion;
 	unsigned int resX, resY;
+	GLenum glewErr;
 
 	m_pGameHandle->getLogger()->print( "Initializing graphics..." );
 
@@ -26,6 +29,8 @@ bool CGraphics::initialize()
 	if( CGraphics::SDLReferenceCount <= 0 ) {
 		m_pGameHandle->getLogger()->print( "Initializing SDL2 library..." );
 		SDL_Init( SDL_INIT_VIDEO );
+		SDL_GetVersion( &sdlVersion );
+		m_pGameHandle->getLogger()->print( "Successfully initialized SDL v%d.%d.%d", (int)sdlVersion.major, (int)sdlVersion.minor, (int)sdlVersion.patch );
 		CGraphics::SDLReferenceCount++;
 	}
 	else
@@ -68,6 +73,26 @@ bool CGraphics::initialize()
 		return false;
 	}
 	m_pGameHandle->getLogger()->print( "Sucessfully created OpenGL context!" );
+
+	// Initialize GLEW
+	m_pGameHandle->getLogger()->print( "Initializing GLEW..." );
+	if( !CGraphics::GLEWInitialized )
+	{
+		glewErr = glewInit();
+		if( glewErr != GLEW_OK ) {
+			m_pGameHandle->getLogger()->print( "Failed it initialize GLEW: %s", glewGetErrorString( glewErr ) );
+			return false;
+		}
+		CGraphics::GLEWInitialized = true;
+	}
+	m_pGameHandle->getLogger()->print( "Successfully initialize GLEW %s!", glewGetString( GLEW_VERSION ) );
+
+	// Print GL info
+	m_pGameHandle->getLogger()->print( "OpenGL Context Info:" );
+	m_pGameHandle->getLogger()->print( "\tVersion: %s", glGetString( GL_VERSION ) );
+	m_pGameHandle->getLogger()->print( "\tVendor: %s", glGetString( GL_VENDOR ) );
+	m_pGameHandle->getLogger()->print( "\tRenderer: %s", glGetString( GL_RENDERER ) );
+	m_pGameHandle->getLogger()->print( "\tGLSL: %s", glGetString( GL_SHADING_LANGUAGE_VERSION ) );
 
 	return true;
 }

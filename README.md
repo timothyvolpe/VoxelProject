@@ -22,6 +22,8 @@ when trying to debug! Additionally, you will likely need to change the debugging
 Libaries
 
 Boost 1.59.0 x64
+SDL2 v2.0.3
+GLEW 1.13.0
 
 
 Requires Microsoft Visual Studio Redistributable 2015 (x64)
