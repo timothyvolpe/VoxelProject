@@ -4,20 +4,19 @@
 #include "game.h"
 #include "config.h"
 #include "gfx\graphics.h"
-#include "gfx\window.h"
 
 CClient::CClient( CGame *pGameHandle ) {
 	m_pGameHandle = pGameHandle;
 	m_pGraphics = 0;
-	m_clientConfigIndex = 0;
+	m_pClientConfig = 0;
 }
 CClient::~CClient() {
 }
 
 bool CClient::initialize()
 {
-	m_pConfig = new CConfig();
-	if( !this->loadConfigs() )
+	m_pClientConfig = new CConfig( m_pGameHandle );
+	if( !this->loadConfig() )
 		return false;
 
 	m_pGraphics = new CGraphics( m_pGameHandle );
@@ -33,15 +32,15 @@ void CClient::destroy()
 		delete m_pGraphics;
 		m_pGraphics = 0;
 	}
-	if( m_pConfig ) {
-		// TODO: Save
-		delete m_pConfig;
-		m_pConfig = 0;
+	if( m_pClientConfig ) {
+		m_pClientConfig->saveConfig();
+		delete m_pClientConfig;
+		m_pClientConfig = 0;
 	}
 	m_pGameHandle = 0;
 }
 
-bool CClient::loadConfigs()
+bool CClient::loadConfig()
 {
 	boost::property_tree::ptree clientConfig;
 
@@ -49,7 +48,7 @@ bool CClient::loadConfigs()
 	clientConfig.put<int>( "ResolutionX", 1024 );
 	clientConfig.put<int>( "ResolutionY", 728 );
 
-	if( !m_pConfig->loadConfig( "client.cfg", &m_clientConfigIndex, clientConfig ) )
+	if( !m_pClientConfig->loadConfig( "client.cfg", clientConfig ) )
 		return false;
 
 	return true;
@@ -76,4 +75,8 @@ bool CClient::update()
 bool CClient::render()
 {
 	return true;
+}
+
+CConfig* CClient::getClientConfig() {
+	return m_pClientConfig;
 }

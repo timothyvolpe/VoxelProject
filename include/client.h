@@ -27,13 +27,11 @@ private:
 	CGame *m_pGameHandle;
 
 	CGraphics *m_pGraphics;
-	CConfig *m_pConfig;
-
-	unsigned int m_clientConfigIndex;
+	CConfig *m_pClientConfig;
 
 	void handleSDLEvents();
 
-	bool loadConfigs();
+	bool loadConfig();
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.
@@ -79,4 +77,10 @@ public:
 	* @date 12/12/2019
 	*/
 	bool render();
+
+	/**
+	* @brief Returns the main client config.
+	* @return Client config.
+	*/
+	CConfig* getClientConfig();
 };

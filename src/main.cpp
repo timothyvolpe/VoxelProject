@@ -5,14 +5,17 @@
 int main( int argc, char *argv[] )
 {
 	CGame game;
+	bool success;
 
-	if( !game.initialize() )
-		return 1;
+	success = game.initialize();
 
 	// Start the game!
-	game.startGame();
+	if( success )
+		game.startGame();
 
 	game.destroy();
 
+	if( !success )
+		return 1;
 	return 0;
 }
