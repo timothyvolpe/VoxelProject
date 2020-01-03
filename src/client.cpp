@@ -74,6 +74,8 @@ bool CClient::update()
 }
 bool CClient::render()
 {
+	m_pGraphics->draw();
+
 	return true;
 }
 

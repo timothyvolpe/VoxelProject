@@ -21,8 +21,8 @@ endforeach()
 # Definitons
 ADD_DEFINITIONS( -DUNICODE )
 ADD_DEFINITIONS( -D_UNICODE )
-#ADD_DEFINITIONS( -DGLEW_STATIC )
-#ADD_DEFINITIONS( -DSDL_MAIN_HANDLED )
+ADD_DEFINITIONS( -DGLEW_STATIC )
+ADD_DEFINITIONS( -DSDL_MAIN_HANDLED )
 #ADD_DEFINITIONS( -D_CRT_SECURE_NO_WARNINGS )
 #ADD_DEFINITIONS( -D_SCL_SECURE_NO_WARNINGS )
 
@@ -75,6 +75,14 @@ endif()
 ############### Libraries ###############
 #########################################
 
+# OpenGL
+
+find_package( OpenGL REQUIRED )
+if( OPENGL_FOUND )
+	include_directories( ${OPENGL_INCLUDE_DIR} )
+	target_link_libraries( ${ProjectName} ${OPENGL_LIBRARIES} )
+endif()
+
 # SDL (2.0.3)
 
 set( SDL2_INCLUDE_DIR "SDL2_INCLUDE_DIR-NOTFOUND" CACHE PATH "" )
@@ -106,4 +114,22 @@ else()
 	message( FATAL_ERROR "Invalid SDL2_MAIN file" )
 endif()
 
+# GLEW
+set( GLEW_INCLUDE_DIR "GLEW_INCLUDE_DIR-NOTFOUND" CACHE PATH "" )
+set( GLEW_LIBRARY "GLEW_LIBRARY-NOTFOUND" CACHE FILEPATH "" )
+set( GLEW_LIBRARY_DEBUG "GLEW_LIBRARY_DEBUG-OPTIONAL-NOTFOUND" CACHE FILEPATH "" )
+if( EXISTS ${GLEW_INCLUDE_DIR} )
+	include_directories( ${GLEW_INCLUDE_DIR} )
+else()
+	message( FATAL_ERROR "Invalid GLEW_INCLUDE_DIR." )
+endif()
+if( EXISTS ${GLEW_LIBRARY} )
+	if( EXISTS ${GLEW_LIBRARY_DEBUG} )
+		target_link_libraries( ${ProjectName} optimized ${GLEW_LIBRARY} debug ${GLEW_LIBRARY_DEBUG} )
+	else()
+		target_link_libraries( ${ProjectName} ${GLEW_LIBRARY} )
+	endif()
+else()
+	message( FATAL_ERROR "Invalid GLEW_LIBRARY file" )
+endif()
 

@@ -9,6 +9,14 @@
 
 #pragma once
 
+#define OPENGL_RED_BITS 5
+#define OPENGL_GREEN_BITS 5
+#define OPENGL_BLUE_BITS 5
+#define OPENGL_DEPTH_BITS 16
+
+#define OPENGL_VERSION_MAJOR 4
+#define OPENGL_VERSION_MINOR 1
+
 #include <SDL.h>
 
 class CGame;
@@ -29,6 +37,7 @@ private:
 	CGame *m_pGameHandle;
 
 	SDL_Window *m_pSDLWindow;
+	SDL_GLContext m_sdlContext;
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.
@@ -57,4 +66,11 @@ public:
 	* @date 12/15/2019
 	*/
 	void destroy();
+
+	/**
+	* @brief Draw the next frame.
+	* @details Performs the necessary OpenGL/SDL steps to draw a frame, as well as notify all the 
+	* rendering classes that it is time to draw.
+	*/
+	bool draw();
 };
