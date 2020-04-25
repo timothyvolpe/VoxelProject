@@ -123,6 +123,7 @@ if( EXISTS ${GLEW_INCLUDE_DIR} )
 else()
 	message( FATAL_ERROR "Invalid GLEW_INCLUDE_DIR." )
 endif()
+
 if( EXISTS ${GLEW_LIBRARY} )
 	if( EXISTS ${GLEW_LIBRARY_DEBUG} )
 		target_link_libraries( ${ProjectName} optimized ${GLEW_LIBRARY} debug ${GLEW_LIBRARY_DEBUG} )

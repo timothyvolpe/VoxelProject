@@ -20,6 +20,22 @@
 #include <SDL.h>
 
 class CGame;
+class CShaderManager;
+
+/**
+* @brief Defines which feature sets are support on the client computer
+*/
+enum GLSupportLevel : char
+{
+	/** No support, the game cannot run the client on this computer/ */
+	GL_SUPPORT_NONE = 0,
+	/** Minimum support, the computer supports OpenGL 3.2+ */
+	GL_SUPPORT_MIN = 1,
+	/** Standard support, the computer supports OpenGL 4.1+ */
+	GL_SUPPORT_STD = 2,
+	/** Maximum support, the computer supports OpenGL 4.6+ */
+	GL_SUPPORT_MAX = 3
+};
 
 /**
 * @brief The graphics handler.
@@ -37,8 +53,12 @@ private:
 
 	CGame *m_pGameHandle;
 
+	char m_glSupportLevel;
+
 	SDL_Window *m_pSDLWindow;
 	SDL_GLContext m_sdlContext;
+
+	CShaderManager *m_pShaderManager;
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.

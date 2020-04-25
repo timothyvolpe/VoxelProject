@@ -7,7 +7,4 @@ Version 0.1.1 Release:
 Version 0.1.2
 -Removed unnecessary CWindow class and moved SDL window to CGraphics
 -Added config files
--Added SDL
--Added OpenGL
--Added GLEW
--Added graphics context
+
