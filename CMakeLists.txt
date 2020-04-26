@@ -134,3 +134,11 @@ else()
 	message( FATAL_ERROR "Invalid GLEW_LIBRARY file" )
 endif()
 
+# GLM
+set( GLM_INCLUDE_DIR "GLM_INCLUDE_DIR-NOTFOUND" CACHE PATH "" )
+if( EXISTS ${GLM_INCLUDE_DIR} )
+	include_directories( ${GLM_INCLUDE_DIR} )
+else()
+	message( FATAL_ERROR "Invalid GLM_INCLUDE_DIR." )
+endif()
+

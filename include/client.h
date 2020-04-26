@@ -12,6 +12,7 @@
 class CGame;
 class CGraphics;
 class CConfig;
+class CUserInput;
 
 /**
 * @brief The client-sided handler.
@@ -28,6 +29,8 @@ private:
 
 	CGraphics *m_pGraphics;
 	CConfig *m_pClientConfig;
+
+	CUserInput *m_pUserInput;
 
 	void handleSDLEvents();
 
@@ -82,5 +85,12 @@ public:
 	* @brief Returns the main client config.
 	* @return Client config.
 	*/
-	CConfig* getClientConfig();
+	inline CConfig* CClient::getClientConfig() { return m_pClientConfig;  }
+	
+
+	/**
+	* @brief Returns the user input handler class
+	* @returns User input handler.
+	*/
+	inline CUserInput* CClient::getInputHandler() { return m_pUserInput;  }
 };
