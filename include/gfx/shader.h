@@ -11,6 +11,13 @@
 
 class CGame;
 class CShaderStage;
+class CShaderProgram;
+
+struct ShaderProgramDefinition
+{
+	std::string programName;
+	std::string vertShader, tessControlShader, tessEvalShader, geomShader, fragShader;
+};
 
 /**
 * @brief Shader service provider for all game objects.
@@ -24,10 +31,14 @@ class CShaderManager
 private:
 	CGame *m_pGameHandle;
 
-	std::map<std::string, std::shared_ptr<CShaderStage>> m_shaderStageObjects;
+	std::vector<std::shared_ptr<CShaderProgram>> m_shaderPrograms;
+	std::map<std::string, unsigned int> m_programIndexMap;
 
 	/** Compiles the shader stages passed and stores them in temporary map m_shaderStageObjects */
-	bool compileShaderStages( std::unordered_set<std::string> &shaderStages );
+	bool compileShaderStages( const std::unordered_set<std::string> &shaderStages, std::map<std::string, std::shared_ptr<CShaderStage>> &compiledStages );
+
+	/** Takes the compiled stages and program definitions and links the programs, then stores them in m_shaderPrograms */
+	bool linkPrograms( const std::map<std::string, std::shared_ptr<CShaderStage>> &compiledStages, const std::vector<ShaderProgramDefinition> &programDefs );
 public:
 	CShaderManager( CGame *pGameHandle );
 	~CShaderManager();
@@ -36,11 +47,25 @@ public:
 	void shutdown();
 
 	/**
-	* @brief Load the shader defined in the shaders.json file
-	* @details Attempts to load each defined shader. If a shader fails to load, it will be treated as a fatal error.
-	* @returns True if all shaders were loaded successfully, or false if there was a failure.
+	* @brief Load the shader programs defined in the shaders.json file
+	* @details Attempts to load each defined shader program. If a shader stage or program fails to load, it will be treated as a fatal error.
+	*	The shader stages are aggregated and compiled, then each program is linked with its respective stages. Afterwards, the loaded shader stages
+	*	are cleared from memory.
+	* @returns True if all shader programs were loaded successfully, or false if there was a failure.
 	*/
-	bool loadShaders();
+	bool loadPrograms();
+
+	/**
+	* @brief Gets the program index, used to retrieve the program object quickly, by name.
+	* @details This function takes the program name, which is case-sensitive, as defined in shaders.json, and 
+	*	attempts to retrieve its index from the index map. The index is used to quickly reference the program,
+	*	and should be found and stored when an object needed the shader program is created. This function should not be called
+	*	every time the program is used.
+	* @param[in]	programName		The name of the shader program.
+	* @param[out]	pIndex			The index of the shader program is stored here if found, otherwise it is untouched.
+	* @returns Returns true if the index was found and stored in pIndex, false if it was not.
+	*/
+	bool getProgramIndex( std::string programName, unsigned int *pIndex );
 };
 
 /**
@@ -52,9 +77,36 @@ public:
 */
 class CShaderProgram
 {
+private:
+	CGame *m_pGameHandle;
+
+	std::string m_programName;
+
+	GLuint m_shaderProgramId;
 public:
-	CShaderProgram();
+	CShaderProgram( CGame* pGameHandle, std::string programName );
 	~CShaderProgram();
+
+	/**
+	* @brief Initialize the shader and create the shader program.
+	* @details Does not attach or link any shaders.
+	* @returns Returns true if successfully created the program, or false otherwise.
+	*/
+	bool initialize();
+	/**
+	* @brief Deletes the shader program
+	*/
+	void deleteProgram();
+
+	/**
+	* @brief Links the shader program object.
+	* @details Shader objects should be attached prior to calling this function.
+	* @returns True if successfully linked, or false if otherwise. Errors will be dumped to the #SHADER_LINK_LOG file.
+	*/
+	bool link();
+
+	inline std::string getProgramName() { return m_programName;  }
+	GLuint getProgramId() { return m_shaderProgramId; }
 };
 
 /**
@@ -73,12 +125,17 @@ private:
 	GLenum m_shaderType;
 
 	GLuint m_shaderObjectId;
+
+	std::vector<GLuint> m_programsAttachedTo;
 public:
 	static const char* getShaderTypeStr( GLenum type );
 
-	CShaderStage( CGame *pGameHandle, std::string shaderName, GLenum shaderType );
+	CShaderStage( CGame *pGameHandle, GLenum shaderType );
 	~CShaderStage();
 
+	/**
+	* @brief Will detach shader from all programs and delete shader stage object.
+	*/
 	void deleteShader();
 
 	/**
@@ -86,10 +143,32 @@ public:
 	* @details This takes the shader stage code from a text file and compiles it to binary. This also creates the GL shader stage object
 	*	if it did not exist prior.
 	* @param[in]	relPath		The relative path to the shader in the shader directory.
-	* @return Returns true if successfully loaded the code and compiled it.
+	* @return Returns true if successfully loaded the code and compiled it, false if it failed. Errors will be dumped to the #SHADER_COMPILE_LOG file.
 	*/
-	bool compileFromFile( std::string relPath );
+	bool createFromFile( std::string relPath );
 
-	inline std::string getShaderName() { return m_shaderName; }
+	/**
+	* @brief Attach the shader stage to a program with the given ID
+	* @details The shader will be attached to a specific program. According to the docs, a shader can be attached to multiple programs
+	*	at once. However, it cannot be deleted until it has been detached from all the programs. Therefore this function will store
+	*	the programs it is attached to, and detech from all when deleted. Programs are stored by their ID, not a pointer to the class.
+	* @param[in]	programId	The openGL object ID of the shader program to attach to.
+	* @returns Returns true if successfully attached, or false otherwise. If the stage was already attached to the specific program, a warning will be displayed but no error will be returned.
+	*/
+	bool attachShader( std::shared_ptr<CShaderProgram> shaderProgram );
+	/**
+	* @brief Detach the shader from the program with the given ID
+	* @details If the shader stage is not attached to the given program, a warning will be displayed.
+	* @param[in]	programId	The openGL object ID of the shader program to detach from.
+	*/
+	void detachShader( std::shared_ptr<CShaderProgram> shaderProgram );
+	/**
+	* @brief Detach the shader stage from all programs, usually before deletion.
+	*/
+	void detachFromAll();
+
+	/** Get the OpenGL enum value for the shader type */
 	inline GLenum getShaderType() { return m_shaderType; }
+	/** Get the OpenGL shader stage ID */
+	inline GLuint getShaderId() { return m_shaderObjectId; }
 };

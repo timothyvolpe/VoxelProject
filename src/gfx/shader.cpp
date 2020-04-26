@@ -27,14 +27,17 @@ void CShaderManager::shutdown()
 {
 }
 
-bool CShaderManager::loadShaders()
+bool CShaderManager::loadPrograms()
 {
 	boost::filesystem::path shaderDefPath;
 	boost::property_tree::ptree shaderDefs;
 
 	std::unordered_set<std::string> shaderStages;
+	std::vector<ShaderProgramDefinition> programDefs;
 
-	m_pGameHandle->getLogger()->print( "Loading shaders from %s...", SHADER_DEF_FILE );
+	std::map<std::string, std::shared_ptr<CShaderStage>> compiledStages;
+
+	m_pGameHandle->getLogger()->print( "Loading shader programs from %s...", SHADER_DEF_FILE );
 
 	// Load and attempt to read the JSON file
 	shaderDefPath = m_pGameHandle->getFilesystem()->getGamePath( FilesystemLocations::LOCATION_SHADERS, SHADER_DEF_FILE );
@@ -59,14 +62,19 @@ bool CShaderManager::loadShaders()
 			m_pGameHandle->getLogger()->printError( "Shader program in %s has a missing or invalid name", SHADER_DEF_FILE );
 			return false;
 		}
-		// Add it to the list of shaders to compile
+
+		// Create program definition
+		ShaderProgramDefinition programDef;
+
+		programDef.programName = it.first;
 
 		// Determine which shaders are supported and can be loaded
 		// Vertex shader, required support
 		vertShaderStr = it.second.get<std::string>( "VertexShader", "" );
 		if( !vertShaderStr.empty() ) {
 			m_pGameHandle->getLogger()->print( "Loading shader stage %s/*.vert...", vertShaderStr.c_str() );
-			shaderStages.insert( (vertShaderStr + "/*.vert") );
+			programDef.vertShader = (vertShaderStr + "/*.vert");
+			shaderStages.insert( programDef.vertShader );
 		}
 		// Tessellation shader, non-required support
 		if( glewIsSupported( "GL_ARB_tessellation_shader" ) )
@@ -74,13 +82,15 @@ bool CShaderManager::loadShaders()
 			tessCShaderStr = it.second.get<std::string>( "TessellationControlShader", "" );
 			if( !tessCShaderStr.empty() ) {
 				m_pGameHandle->getLogger()->print( "Loading shader stage %s/*.tesc...", tessCShaderStr.c_str() );
-				shaderStages.insert( (tessCShaderStr + "/*.tesc") );
+				programDef.tessControlShader = (tessCShaderStr + "/*.tesc");
+				shaderStages.insert( programDef.tessControlShader );
 			}
 
 			tessEShaderStr = it.second.get<std::string>( "TessellationEvalShader", "" );
 			if( !tessEShaderStr.empty() ) {
 				m_pGameHandle->getLogger()->print( "Loading shader stage %s/*.tese...", tessEShaderStr.c_str() );
-				shaderStages.insert( (tessEShaderStr + "/*.tese") );
+				programDef.tessEvalShader = (tessEShaderStr + "/*.tese");
+				shaderStages.insert( programDef.tessEvalShader );
 			}
 		}
 		else
@@ -89,33 +99,37 @@ bool CShaderManager::loadShaders()
 		geomShaderStr = it.second.get<std::string>( "GeometryShader", "" );
 		if( !geomShaderStr.empty() ) {
 			m_pGameHandle->getLogger()->print( "Loading shader stage %s/*.geom...", geomShaderStr.c_str() );
+			programDef.geomShader = (geomShaderStr + "/*.geom");
 			shaderStages.insert( (geomShaderStr + "/*.geom") );
 		}
 		// Fragment shader, required support
 		fragShaderStr = it.second.get<std::string>( "FragmentShader", "" );
 		if( !fragShaderStr.empty() ) {
 			m_pGameHandle->getLogger()->print( "Loading shader stage %s/*.frag...", fragShaderStr.c_str() );
-			shaderStages.insert( (fragShaderStr + "/*.frag") );
+			programDef.fragShader = (fragShaderStr + "/*.frag");
+			shaderStages.insert( programDef.fragShader );
 		}
+
+		programDefs.push_back( programDef );
 	}
 
 	// Load and compile the shader stages
-	if( !this->compileShaderStages( shaderStages ) )
+	if( !this->compileShaderStages( shaderStages, compiledStages ) )
 		return false;
+	// Link programs
+	if( !this->linkPrograms( compiledStages, programDefs ) )
+		return false;
+	
 
 	return true;
 }
 
-bool CShaderManager::compileShaderStages( std::unordered_set<std::string> &shaderStages )
+bool CShaderManager::compileShaderStages( const std::unordered_set<std::string> &shaderStages, std::map<std::string, std::shared_ptr<CShaderStage>> &compiledStages )
 {
+	compiledStages.clear();
+
 	for( auto it: shaderStages )
 	{
-		// Make sure this stage isnt already stored in memory
-		if( m_shaderStageObjects.find( it ) != m_shaderStageObjects.end() ) {
-			m_pGameHandle->getLogger()->printWarn( "Shader stage %s tried to compile twice, ignoring second time\n", it.c_str() );
-			continue;
-		}
-
 		// Determine type
 		std::string extensionType = it.substr( it.length() - 4 );
 		GLenum shaderType;
@@ -135,22 +149,82 @@ bool CShaderManager::compileShaderStages( std::unordered_set<std::string> &shade
 			return false;
 		}
 
-		// Extract shader name
-		size_t shaderNameEnd = it.find_last_of( '/' );
-		if( shaderNameEnd == std::string::npos ) {
-			// shouldnt happen
-			m_pGameHandle->getLogger()->printError( "Invalid shader stage name" );
-			return false;
-		}
-		std::string shaderName = it.substr( 0, shaderNameEnd );
-
 		// Create the shader stage object
-		std::shared_ptr<CShaderStage> shaderStage = std::make_shared<CShaderStage>( m_pGameHandle, shaderName, shaderType );
+		std::shared_ptr<CShaderStage> shaderStage = std::make_shared<CShaderStage>( m_pGameHandle, shaderType );
 
-		if( !shaderStage->compileFromFile( it ) )
+		if( !shaderStage->createFromFile( it ) )
 			return false;
+		// Add to list of compiled shaders
+		compiledStages.insert( std::pair<std::string, std::shared_ptr<CShaderStage>>( it, shaderStage ) );
 	}
 
+	return true;
+}
+
+bool CShaderManager::linkPrograms( const std::map<std::string, std::shared_ptr<CShaderStage>> &compiledStages, const std::vector<ShaderProgramDefinition> &programDefs )
+{
+	// Iterate and link programs
+	for( auto it: programDefs )
+	{
+		std::vector<std::shared_ptr<CShaderStage>> stages;
+
+		m_pGameHandle->getLogger()->print( "Linking shader program %s...", it.programName.c_str() );
+
+		// Load the stages associate with the shader
+		// vert shader
+		auto it2 = compiledStages.find( it.vertShader );
+		if( it2 != compiledStages.end() )
+			stages.push_back( (*it2).second );
+		// tess control shader
+		it2 = compiledStages.find( it.tessControlShader );
+		if( it2 != compiledStages.end() )
+			stages.push_back( (*it2).second );
+		// tess eval shader
+		it2 = compiledStages.find( it.tessEvalShader );
+		if( it2 != compiledStages.end() )
+			stages.push_back( (*it2).second );
+		// geom shader
+		it2 = compiledStages.find( it.geomShader );
+		if( it2 != compiledStages.end() )
+			stages.push_back( (*it2).second );
+		// frag shader
+		it2 = compiledStages.find( it.fragShader );
+		if( it2 != compiledStages.end() )
+			stages.push_back( (*it2).second );
+
+		// make sure there are stages
+		if( stages.empty() ) {
+			m_pGameHandle->getLogger()->printError( "Failed to link shader program: program was empty" );
+			return false;
+		}
+
+		// Create program
+		std::shared_ptr<CShaderProgram> shaderProgram = std::make_shared<CShaderProgram>( m_pGameHandle, it.programName );
+		if( !shaderProgram->initialize() )
+			return false;
+
+		// Attach shaders
+		for( auto it: stages )
+		{
+			if( !it->attachShader( shaderProgram ) )
+				return false;
+		}
+		if( shaderProgram->link() )
+			return false;
+
+		m_shaderPrograms.push_back( shaderProgram );
+		m_programIndexMap.insert( std::pair<std::string, unsigned int>( shaderProgram->getProgramName(), (unsigned int)m_shaderPrograms.size()-1 ) );
+	}
+
+	return true;
+}
+
+bool CShaderManager::getProgramIndex( std::string programName, unsigned int *pIndex )
+{
+	auto it = m_programIndexMap.find( programName );
+	if( it == m_programIndexMap.end() )
+		return false;
+	(*pIndex) = (*it).second;
 	return true;
 }
 
@@ -158,11 +232,77 @@ bool CShaderManager::compileShaderStages( std::unordered_set<std::string> &shade
 // CShaderProgram //
 ////////////////////
 
-CShaderProgram::CShaderProgram()
+CShaderProgram::CShaderProgram( CGame* pGameHandle, std::string programName ) : m_pGameHandle( pGameHandle )
 {
+	m_programName = programName;
+	m_shaderProgramId = 0;
 }
-CShaderProgram::~CShaderProgram()
+CShaderProgram::~CShaderProgram() {
+	this->deleteProgram();
+}
+
+bool CShaderProgram::initialize()
 {
+	assert( m_shaderProgramId == 0 );
+
+	m_shaderProgramId = glCreateProgram();
+	if( m_shaderProgramId == 0 ) {
+		m_pGameHandle->getLogger()->printError( "Failed to create shader program object for shader program %s", m_programName.c_str() );
+		return false;
+	}
+	return true;
+}
+void CShaderProgram::deleteProgram()
+{
+	if( m_shaderProgramId ) {
+		glDeleteProgram( m_shaderProgramId );
+		m_shaderProgramId = 0;
+	}
+}
+
+bool CShaderProgram::link()
+{
+	assert( m_shaderProgramId != 0 );
+
+	GLint glStatus;
+
+	glLinkProgram( m_shaderProgramId );
+	// Check if link was successful
+	glGetProgramiv( m_shaderProgramId, GL_LINK_STATUS, &glStatus );
+	if( glStatus == GL_FALSE )
+	{
+		GLint logLength = 0;
+		std::string programLinkLog;
+
+		// Get the shader log
+		glGetProgramiv( m_shaderProgramId, GL_INFO_LOG_LENGTH, &logLength );
+		if( logLength > 0 )
+		{
+			programLinkLog.resize( logLength );
+			glGetProgramInfoLog( m_shaderProgramId, logLength, &logLength, &programLinkLog[0] );
+			// Dump to a file
+			if( !programLinkLog.empty() )
+			{
+				std::ofstream fileOut;
+				boost::filesystem::path logFilePath;
+				logFilePath = m_pGameHandle->getFilesystem()->getGamePath( FilesystemLocations::LOCATION_SHADERS, SHADER_LINK_LOG );
+				fileOut.open( logFilePath.c_str(), std::ios::out | std::ofstream::trunc );
+				if( fileOut.is_open() )
+				{
+					auto time = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
+					fileOut << "Shader Program Link Info Log: ";
+					fileOut << std::ctime( &time );
+					fileOut << "Program " << m_programName.c_str() << " failed to link\n";
+					fileOut << programLinkLog;
+				}
+				else
+					m_pGameHandle->getLogger()->print( "Failed to write shader program link log to %s", logFilePath.c_str() );
+			}
+		}
+		return false;
+	}
+
+	return true;
 }
 
 //////////////////
@@ -188,9 +328,8 @@ const char* CShaderStage::getShaderTypeStr( GLenum type )
 	}
 }
 
-CShaderStage::CShaderStage( CGame *pGameHandle, std::string shaderName, GLenum shaderType ) : m_pGameHandle( pGameHandle )
+CShaderStage::CShaderStage( CGame *pGameHandle, GLenum shaderType ) : m_pGameHandle( pGameHandle )
 {
-	m_shaderName = shaderName;
 	m_shaderType = shaderType;
 
 	m_shaderObjectId = 0;
@@ -202,13 +341,15 @@ CShaderStage::~CShaderStage()
 
 void CShaderStage::deleteShader()
 {
-	if( m_shaderObjectId ) {
+	if( m_shaderObjectId )
+	{
+		this->detachFromAll();
 		glDeleteShader( m_shaderObjectId );
 		m_shaderObjectId = 0;
 	}
 }
 
-bool CShaderStage::compileFromFile( std::string relPath )
+bool CShaderStage::createFromFile( std::string relPath )
 {
 	boost::filesystem::path absFilePath;
 	boost::filesystem::path shaderDir;
@@ -227,7 +368,7 @@ bool CShaderStage::compileFromFile( std::string relPath )
 	// Get the shader stage directory
 	shaderDir = absFilePath.parent_path();
 	if( !boost::filesystem::is_directory( shaderDir ) ) {
-		m_pGameHandle->getLogger()->printError( "Failed to compile shader stage: shader directory %s was not found", m_shaderName.c_str() );
+		m_pGameHandle->getLogger()->printError( "Failed to compile shader stage: shader directory %s was not found", shaderDir.c_str() );
 		return false;
 	}
 
@@ -294,7 +435,7 @@ bool CShaderStage::compileFromFile( std::string relPath )
 	const GLchar* pShaderSrc = glslCodeStr.c_str();
 	glShaderSource( m_shaderObjectId, 1, &pShaderSrc, 0 );
 	glCompileShader( m_shaderObjectId );
-	// Check if compiliation was successful
+	// Check if compilation was successful
 	glGetShaderiv( m_shaderObjectId, GL_COMPILE_STATUS, &glStatus );
 	if( glStatus == GL_FALSE )
 	{
@@ -319,14 +460,71 @@ bool CShaderStage::compileFromFile( std::string relPath )
 					auto time = std::chrono::system_clock::to_time_t( std::chrono::system_clock::now() );
 					fileOut << "Shader Compile Info Log: ";
 					fileOut << std::ctime( &time );
-					fileOut << "Shader " << absFilePath.string() << " failed to compile\n";
+					fileOut << "Shader " << m_shaderName.c_str() << " (" << CShaderStage::getShaderTypeStr( m_shaderType ) << ") failed to compile\n";
 					fileOut << shaderCompileLog;
 				}
 				else
-					m_pGameHandle->getLogger()->print( "Failed to write shader compile log to %s", SHADER_COMPILE_LOG );
+					m_pGameHandle->getLogger()->print( "Failed to write shader compile log to %s", logFilePath.c_str() );
 			}
 		}
 		return false;
 	}
 	return true;
+}
+
+bool CShaderStage::attachShader( std::shared_ptr<CShaderProgram> shaderProgram )
+{
+	assert( shaderProgram->getProgramId() != 0 );
+	assert( m_shaderObjectId != 0 );
+
+	GLenum glError;
+
+	// Make sure it is not already attached
+	if( std::find( m_programsAttachedTo.begin(), m_programsAttachedTo.end(), shaderProgram->getProgramId() ) != m_programsAttachedTo.end() ) {
+		m_pGameHandle->getLogger()->printWarn( "Attempted to attach shader stage %s (%s) to program %s more than once!", m_shaderName, CShaderStage::getShaderTypeStr( m_shaderType ), shaderProgram->getProgramName().c_str() );
+		return true;
+	}
+
+	glAttachShader( shaderProgram->getProgramId(), m_shaderObjectId );
+	if( (glError = glGetError()) != GL_NO_ERROR ) {
+		m_pGameHandle->getLogger()->printError( "Failed to attach shader stage to shader program, GL error code: %u", glError );
+		return false;
+	}
+	m_programsAttachedTo.push_back( shaderProgram->getProgramId() );
+
+	return true;
+}
+void CShaderStage::detachShader( std::shared_ptr<CShaderProgram> shaderProgram )
+{
+	assert( shaderProgram->getProgramId() != 0 );
+	assert( m_shaderObjectId != 0 );
+
+	GLenum glError;
+
+	// make sure it is attached
+	auto it = std::find( m_programsAttachedTo.begin(), m_programsAttachedTo.end(), shaderProgram->getProgramId() );
+	if( it == m_programsAttachedTo.end() ) {
+		m_pGameHandle->getLogger()->printWarn( "Attempted to deattach shader stage %s (%s) from program %s when it was not attached!", m_shaderName, CShaderStage::getShaderTypeStr( m_shaderType ), shaderProgram->getProgramName().c_str() );
+		return;
+	}
+
+	glDetachShader( shaderProgram->getProgramId(), m_shaderObjectId );
+	if( (glError = glGetError()) != GL_NO_ERROR ) {
+		m_pGameHandle->getLogger()->printError( "Failed to deattach shader stage from shader program, GL error code: %u", glError );
+		return;
+	}
+	m_programsAttachedTo.erase( it );
+}
+void CShaderStage::detachFromAll()
+{
+	assert( m_shaderObjectId != 0 );
+
+	GLenum glError;
+
+	for( auto it: m_programsAttachedTo ) {
+		glDetachShader( (it), m_shaderObjectId );
+		if( (glError = glGetError()) != GL_NO_ERROR )
+			m_pGameHandle->getLogger()->printError( "Failed to deattach shader stage from shader program, GL error code: %u", glError );
+	}
+	m_programsAttachedTo.clear();
 }

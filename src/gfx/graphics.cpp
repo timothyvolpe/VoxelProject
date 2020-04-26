@@ -120,7 +120,7 @@ bool CGraphics::initialize()
 	if( !m_pShaderManager->initialize() )
 		return false;
 	// Load the shader files
-	if( !m_pShaderManager->loadShaders() )
+	if( !m_pShaderManager->loadPrograms() )
 		return false;
 
 	return true;
