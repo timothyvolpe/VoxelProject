@@ -2,6 +2,7 @@
 #include "logger.h"
 #include "filesystem.h"
 #include "client.h"
+#include "server.h"
 
 CGame::CGame()
 {
@@ -11,6 +12,7 @@ CGame::CGame()
 	m_pFilesystem = 0;
 
 	m_pClient = 0;
+	m_pServer = 0;
 
 	m_currentTimeUs = 0;
 	m_lastFrameUs = 0;
@@ -21,6 +23,8 @@ CGame::~CGame() {
 
 bool CGame::initialize()
 {
+	assert( !m_pLogger && !m_pClient && !m_pServer );
+
 	m_pLogger = new CLogger();
 	if( !m_pLogger->start() )
 		return false;
@@ -30,9 +34,16 @@ bool CGame::initialize()
 	m_pFilesystem = new CFilesystem( m_pLogger );
 	if( !m_pFilesystem->verifyFilesystem() )
 		return false;
-
+	
 	m_pClient = new CClient( this );
 	if( !m_pClient->initialize() )
+		return false;
+
+	m_pServer = new CServer( this );
+	// Start server thread
+	if( !m_pServer->initialize() )
+		return false;
+	if( !m_pServer->startServer() )
 		return false;
 
 	// so that the frame time isnt huge or 0
@@ -43,6 +54,12 @@ bool CGame::initialize()
 }
 void CGame::destroy()
 {
+	// Shutdown server
+	if( m_pServer ) {
+		m_pServer->shutdownServer();
+		delete m_pServer;
+		m_pServer = 0;
+	}
 	if( m_pClient ) {
 		m_pClient->destroy();
 		delete m_pClient;
@@ -70,10 +87,13 @@ bool CGame::startGame()
 		m_currentTimeUs = std::chrono::duration_cast<std::chrono::microseconds>(curtime).count();
 		m_lastFrameTimeSeconds = (m_currentTimeUs - m_lastFrameTimeSeconds) * 1000000;
 
+		// Update server
+		if( !m_pServer->update() )
+			return false;
 		// Update client
 		if( !m_pClient->update() )
 			return false;
-		// Update server...
+
 		// Update logger last
 		m_pLogger->update( this->getFrameTime() );
 

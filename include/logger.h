@@ -12,6 +12,9 @@
 #include <fstream>
 #include <string>
 #include <queue>
+#include <thread>
+#include <mutex>
+#include <atomic>
 #include <boost\format.hpp>
 
 #ifdef WIN32
@@ -60,6 +63,9 @@ private:
 
 	std::ofstream m_logFile;
 
+	std::atomic<std::thread::id> m_serverThreadId;
+	std::mutex m_logMutex;
+
 	/**
 	* @brief Print formatted helper function
 	* Prints a formatted string to the console, as well as the log file.
@@ -76,41 +82,33 @@ private:
 		std::string prefix;
 		std::string logPrefix, logStr;
 
+		// prefix is appended to the console output and log file output
+		// logPrefix is appended to the log file output, and should make up for the lack of color in the text file
+
+		// Check if the function call is on the server thread
+		if( std::this_thread::get_id() == m_serverThreadId ) {
+			prefix = "[SERVER] ";
+		}
+		else
+			prefix = "";
+		logPrefix = "";
+
 		switch( formatDesc )
 		{
 		case LOGGER_FORMAT_NORMAL:
 			break;
-		case LOGGER_FORMAT_NORMAL_SERVER:
-			prefix = "[SERVER] ";
-			break;
 		case LOGGER_FORMAT_WARNING:
-			logPrefix = "WARNING: ";
-			break;
-		case LOGGER_FORMAT_WARNING_SERVER:
-			logPrefix = "WARNING: ";
-			prefix = "[SERVER] ";
+			logPrefix += "WARNING: ";
 			break;
 		case LOGGER_FORMAT_ERROR:
-			logPrefix = "ERROR: ";
-			prefix = "";
-			break;
-		case LOGGER_FORMAT_ERROR_SERVER:
-			logPrefix = "ERROR: ";
-			prefix = "[SERVER] ";
+			logPrefix += "ERROR: ";
 			break;
 		case LOGGER_FORMAT_LUA:
-			prefix = "[LUA] ";
-			break;
-		case LOGGER_FORMAT_LUA_SERVER:
-			prefix = "[LUA][SERVER] ";
+			prefix += "[LUA] ";
 			break;
 		case LOGGER_FORMAT_LUA_ERROR:
-			logPrefix = "ERROR: ";
-			prefix = "[LUA] ";
-			break;
-		case LOGGER_FORMAT_LUA_ERROR_SERVER:
-			logPrefix = "ERROR: ";
-			prefix = "[LUA][SERVER] ";
+			prefix += "[LUA] ";
+			logPrefix += "ERROR: ";
 			break;
 		}
 
@@ -121,6 +119,7 @@ private:
 		using unroll = int[]; unroll{ 0, (formatter % std::forward<Args>( args ), 0)... };
 
 		// console print
+		std::lock_guard<std::mutex> lock( m_logMutex );
 		std::cout << boost::str( formatter ) << "\n";
 		// log file print
 		logStr = logPrefix + boost::str( formatter );
@@ -174,7 +173,15 @@ public:
 	bool update( double elapsedTime );
 
 	/**
+	* @brief Tell the logger what the server thread's id is for identification
+	* @details This id is used so the logger can determine when a print command is coming from the server
+	*	instead of the client. This function is thread-safe.
+	*/
+	void setServerThreadId( std::thread::id threadId );
+
+	/**
 	* @brief Print and log informational message with newline character.
+	* @details This function is thread-safe.
 	* @param[in]	format	The output string format
 	* @param[in]	args	Variable arguments to be inserted into formatStr
 	* @author Timothy Volpe
@@ -186,6 +193,7 @@ public:
 	}
 	/**
 	* @brief Print and log warning message with newline character.
+	* @details This function is thread-safe.
 	* @param[in]	format	The output string format
 	* @param[in]	args	Variable arguments to be inserted into formatStr
 	* @author Timothy Volpe
@@ -197,6 +205,7 @@ public:
 	}
 	/**
 	* @brief Print and log error message with newline character.
+	* @details This function is thread-safe.
 	* @param[in]	format	The output string format
 	* @param[in]	args	Variable arguments to be inserted into formatStr
 	* @author Timothy Volpe
@@ -209,6 +218,7 @@ public:
 
 	/**
 	* @brief Print and log lua informational message with newline character.
+	* @details This function is thread-safe.
 	* @param[in]	format	The output string format
 	* @param[in]	args	Variable arguments to be inserted into formatStr
 	* @author Timothy Volpe
@@ -220,6 +230,7 @@ public:
 	}
 	/**
 	* @brief Print and log lua error message with newline character.
+	* @details This function is thread-safe.
 	* @param[in]	format	The output string format
 	* @param[in]	args	Variable arguments to be inserted into formatStr
 	* @author Timothy Volpe

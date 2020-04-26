@@ -19,6 +19,7 @@ class CLogger;
 class CFilesystem;
 
 class CClient;
+class CServer;
 
 /**
 * @brief The main game class, everything starts and ends here.
@@ -38,6 +39,7 @@ private:
 	CFilesystem *m_pFilesystem;
 
 	CClient *m_pClient;
+	CServer *m_pServer;
 
 	/** The frame time, recorded at the beginning of the frame */
 	long long m_currentTimeUs;

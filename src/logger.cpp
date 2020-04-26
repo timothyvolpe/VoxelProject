@@ -11,11 +11,17 @@ bool CLogger::flush()
 {
 	m_timeSinceLastFlush = 0;
 
-	while( !m_logEntryQueue.empty() ) {
-		std::string logEntry = m_logEntryQueue.front();
+	// Copy log queue and delete original
+	std::unique_lock<std::mutex> lock( m_logMutex );
+	std::queue<std::string> logQueueCopy = m_logEntryQueue;
+	m_logEntryQueue = std::queue<std::string>();
+	lock.unlock();
+
+	while( !logQueueCopy.empty() ) {
+		std::string logEntry = logQueueCopy.front();
 		if( m_logFile ) 
 			m_logFile << logEntry << "\n";
-		m_logEntryQueue.pop();
+		logQueueCopy.pop();
 	}
 	return true;
 }
@@ -45,4 +51,8 @@ bool CLogger::update( double elapsedTime )
 		this->flush();
 
 	return true;
+}
+
+void CLogger::setServerThreadId( std::thread::id threadId ) {
+	m_serverThreadId = threadId;
 }
