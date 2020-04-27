@@ -6,12 +6,17 @@
 #include "input.h"
 #include "logger.h"
 #include "gfx\graphics.h"
+#include "gfx\renderer.h"
 
-CClient::CClient( CGame *pGameHandle ) {
+CClient::CClient( CGame *pGameHandle )
+{
 	m_pGameHandle = pGameHandle;
 	m_pGraphics = 0;
 	m_pClientConfig = 0;
 	m_pUserInput = 0;
+	m_pWorldRenderer = 0;
+
+	testEntity = 0;
 }
 CClient::~CClient() {
 }
@@ -26,15 +31,34 @@ bool CClient::initialize()
 	if( !m_pGraphics->initialize() )
 		return false;
 
+	m_pWorldRenderer = new CWorldRenderer( m_pGameHandle );
+	if( !m_pWorldRenderer->initialize() )
+		return false;
+
 	m_pUserInput = new CUserInput();
+
+	if( !m_pWorldRenderer->createClientEntity( ComponentSignature(), &testEntity ) ) {
+		m_pGameHandle->getLogger()->printError( "Failed to create test entity" );
+		return false;
+	}
 
 	return true;
 }
 void CClient::destroy()
 {
+	if( testEntity ) {
+		m_pWorldRenderer->destroyClientEntity( testEntity );
+		testEntity = 0;
+	}
+
 	if( m_pUserInput ) {
 		delete m_pUserInput;
 		m_pUserInput = 0;
+	}
+	if( !m_pWorldRenderer ) {
+		m_pWorldRenderer->destroy();
+		delete m_pWorldRenderer;
+		m_pWorldRenderer = 0;
 	}
 	if( m_pGraphics ) {
 		m_pGraphics->destroy();

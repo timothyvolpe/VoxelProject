@@ -1,27 +1,16 @@
 #pragma once
-#include <glm\glm.hpp>
 #include <vector>
 #include <limits>
 #include <queue>
-#include <bitset>
 #include <array>
 #include <unordered_map>
 #include <memory>
 #include "entity.h"
-
-#define ENTITY_MAX 1024
-#define COMPONENT_TYPE_MAX 16
-
-typedef std::bitset<COMPONENT_TYPE_MAX> ComponentSignature;
+#include "componentdef.h"
 
 //////////////
 // Entities //
 //////////////
-
-/** Guaranteed to be able to hold the maximum ID an entity can have. */
-typedef uint32_t EntityInt;
-typedef EntityInt Entity;
-
 
 /**
 * @brief The entity manager class.
@@ -33,12 +22,22 @@ typedef EntityInt Entity;
 class CEntityManager
 {
 private:
+	EntityInt m_idRangeStart;
+
 	std::queue<Entity> m_availableIds;
 	std::array<ComponentSignature, ENTITY_MAX> m_entitySignatures;
 
 	EntityInt m_activeEntities;
+
+	/** Calculate the entities index from its ID by applying a simple offset related to m_idRangeStart */
+	inline EntityInt calculateEntityIndex( Entity entity ) { return entity - m_idRangeStart; }
 public:
-	CEntityManager();
+	/**
+	* @brief Constructor
+	* @param[in]	idRangeStart	The first legal ID that this entity manager can create
+	* @param[in]	idRangeStop		The last legal IDD that this entity manager can create. Only used for error checking, the last ID creatable will be idRangeStart+#ENTITY_MAX. Non-inclusive
+	*/
+	CEntityManager( EntityInt idRangeStart, EntityInt idRangeStop );
 
 	/**
 	* @brief Create a new entity by retrieving an available ID
@@ -74,7 +73,8 @@ public:
 	* @returns Returns the signature of the given entity.
 	*/
 	inline ComponentSignature GetSignature( Entity entity ) {
-		return m_entitySignatures[entity];
+		assert( entity >= m_idRangeStart && entity < ENTITY_MAX+m_idRangeStart );
+		return m_entitySignatures[this->calculateEntityIndex( entity )];
 	}
 };
 
@@ -82,24 +82,13 @@ public:
 // Components //
 ////////////////
 
-typedef glm::vec3 Position3D;
-typedef glm::vec3 Rotation3D;
-typedef glm::vec3 Scale3D;
-
-typedef uint16_t ComponentType;
-
-struct Transform3DComponent
-{
-	Position3D	position;
-	Rotation3D	rotation;
-	Scale3D		scale;
-};
-
 /**
 * @brief The CComponentArray typeless interface.
 */
 class IComponentArray
 {
+public:
+	virtual void DestroyEntitiesComponent( Entity entity ) = 0;
 };
 
 /**
@@ -118,8 +107,6 @@ private:
 
 	EntityInt m_activeComponents;
 
-	std::vector<T> m_componentArray;
-
 	std::unordered_map<Entity, size_t> m_entityToIndexMap;
 	std::unordered_map<size_t, Entity> m_indexToEntityMap;
 public:
@@ -136,7 +123,7 @@ public:
 	*/
 	bool InsertComponent( Entity entity, T component )
 	{
-		assert( m_activeComponents < <ENTITY_MAX );
+		assert( m_activeComponents < ENTITY_MAX );
 		assert( m_entityToIndexMap.find( entity ) == m_entityToIndexMap.end() );
 
 		if( m_activeComponents >= ENTITY_MAX )
@@ -166,15 +153,13 @@ public:
 		size_t componentIndex = m_entityToIndexMap[entity];
 		m_componentArray[componentIndex] = m_componentArray[m_activeComponents-1];
 		// Set last entity to point to deleted entity's old spot
-		m_entityToIndexMap[mIndexToEntityMap[m_activeComponents-1]] = componentIndex;
-		m_indexToEntityMap[componentIndex] = mIndexToEntityMap[m_activeComponents-1];
+		m_entityToIndexMap[m_indexToEntityMap[m_activeComponents-1]] = componentIndex;
+		m_indexToEntityMap[componentIndex] = m_indexToEntityMap[m_activeComponents-1];
 		// Delete last element
 		m_entityToIndexMap.erase( entity );
-		mIndexToEntityMap.erase( m_activeComponents-1 );
+		m_indexToEntityMap.erase( m_activeComponents-1 );
 
 		m_activeComponents--;
-
-		return true;
 	}
 
 	/**
@@ -189,6 +174,14 @@ public:
 		(*pComponent) = entity;
 
 		return true;
+	}
+
+	/**
+	* @brief Destroy an entities data in the component array
+	*/
+	void DestroyEntitiesComponent( Entity entity )
+	{
+		this->RemoveComponent( entity );
 	}
 };
 
@@ -207,31 +200,95 @@ private:
 	std::unordered_map<const char*, std::shared_ptr<IComponentArray>> m_componentArrays;
 
 	ComponentType m_activeComponentTypes;
+
+	/** Retrieves a pointer to a component array of the given type, if registered. */
+	template<typename T>
+	std::shared_ptr<CComponentArray<T>> GetComponentArray()
+	{
+		const char* typeName = typeid(T).name();
+
+		assert( m_componentTypes.find( typeName ) != m_componentTypes.end() );
+
+		return std::static_pointer_cast<CComponentArray<T>>( m_componentArrays[typeName] );
+	}
 public:
 	CComponentManager() {
 		m_activeComponentTypes = 0;
 	}
+
 	/**
 	* @brief Registers a component type with the manager.
 	* @details The component type is identified by a string container its type identifier.
-	*	If the maximum component types has been reached, set by #COMPONENT_TYPE_MAX, the registration will fail.
-	* @returns True if the component was registered, or false if #COMPONENT_TYPE_MAX has been reached.
+	*	If the maximum component types has been reached, set by #COMPONENT_TYPE_MAX, or the component has already been registered, the registration will fail.
+	* @returns True if the component was registered, or false if #COMPONENT_TYPE_MAX has been reached, or the component has already been registered.
 	*/
 	template<typename T>
-	void RegisterComponent()
+	bool RegisterComponent()
 	{
 		const char* typeName = typeid(T).name();
 
 		assert( m_componentTypes.find( typeName ) == m_componentTypes.end() );
 		assert( m_activeComponentTypes < COMPONENT_TYPE_MAX );
 
+		if( m_componentTypes.find( typeName ) != m_componentTypes.end() )
+			return false;
 		if( m_activeComponentTypes >= COMPONENT_TYPE_MAX )
 			return true;
 
 		// Add to the component type map identifier
 		m_componentTypes.insert( std::pair<const char*, ComponentType>( typeName, m_activeComponentTypes ) );
-		m_componentTypes.insert( std::pair<const char*, std::shared_ptr<IComponentArray>( typeName, std::make_shared<CComponentArray<T>>() );
+		m_componentArrays.insert( std::pair<const char*, std::shared_ptr<IComponentArray>>( typeName, std::make_shared<CComponentArray<T>>() ) );
 		m_activeComponentTypes++;
+
+		return true;
+	}
+
+	/**
+	* @brief Get the type id for the given component, used in signatures.
+	* @details The type id identifies which bit in the signature to set to enable that component for the entity.
+	* @returns Returns the type id.
+	*/
+	template<typename T>
+	ComponentType GetComponentTypeId() {
+		const char* typeName = typeid(T).name();
+		assert( m_componentTypes.find( typeName ) != m_componentTypes.end() );
+		return m_componentTypes[typeName];
+	}
+
+	/**
+	* @brief Add a component to a component type.
+	* @details See CComponentArray::InsertComponent for more information. 
+	* @param[in]	entity		The entity whose component to add
+	* @param[in]	component	The component to add to the entity
+	* @returns True if successfully added component, or false otherwise.
+	*/
+	template<typename T>
+	bool AddComponent( Entity entity, T component ) {
+		return this->GetComponentArray<T>()->InsertComponent( entity, component );
+	}
+
+	/**
+	* @brief Removes a component from a component type.
+	* @details see CComponentArray:RemoveComponent for more information.
+	* @param[in]	entity	The entity whose component to remove.
+	*/
+	template<typename T>
+	void RemoveComponent( Entity entity ) {
+		return this->GetComponentArray<T>()->RemoveComponent( entity );
+	}
+
+	/**
+	* @brief Called when an entity is destroyed.
+	* @details Checks entity for component types and destroys the entities valid components.
+	* @param[in]	signature	The signature of the destroyed entity, used to find components.
+	* @param[in]	entity		The entity ID of the destroyed entity
+	*/
+	void EntityDestroy( ComponentSignature signature, Entity entity )
+	{
+		for( auto it: m_componentArrays )
+		{
+			it.second->DestroyEntitiesComponent( entity );
+		}
 	}
 };
 
@@ -239,13 +296,51 @@ public:
 // Systems //
 /////////////
 
-class CEntitySystem
+class CSystemBase
 {
 protected:
 	std::vector<Entity> m_entities;
+public:
+	virtual bool initialize() = 0;
+	virtual void shutdown() = 0;
+
+	virtual bool update( float deltaT ) = 0;
 };
 
+
+/**
+* @brief The system manager.
+* @details This class manages a collection of systems that connect components and entities.
+*	See https://austinmorlan.com/posts/entity_component_system/
+*
+* @author Timothy Volpe
+* @date 4/27/2020
+*/
 class CSystemManager
 {
+private:
+	std::unordered_map<const char*, std::shared_ptr<CSystemBase>> m_systemArray;
+public:
 
+	/**
+	* @brief Registers a system with the manager.
+	* @details If the system has already been registered, the registration will fail. A pointer to the system
+	*	is returned by the function if successfully registered the system.
+	* @returns Returns a pointer to the system if the registration was successful. If it failed, it will return a null pointer.
+	*/
+	template<typename T>
+	std::shared_ptr<T> RegisterSystem()
+	{
+		const char* typeName = typeid(T).name();
+
+		assert( m_systemArray.find( typeName ) == m_systemArray.end() );
+
+		if( m_systemArray.find( typeName ) != m_systemArray.end() )
+			return 0;
+
+		std::shared_ptr<T> system = std::make_shared<T>();
+		m_systemArray.insert( std::pair<const char*, std::shared_ptr<CSystemBase>>( typeName, system ) );
+
+		return system;
+	}
 };

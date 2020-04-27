@@ -10,6 +10,7 @@
 #pragma once
 
 #include <chrono>
+#include <atomic>
 
 #define GAME_VERSION_MAJOR 0
 #define GAME_VERSION_MINOR 1
@@ -42,11 +43,11 @@ private:
 	CServer *m_pServer;
 
 	/** The frame time, recorded at the beginning of the frame */
-	long long m_currentTimeUs;
+	std::chrono::high_resolution_clock::time_point m_currentTime;
 	/** The time of the beginning of the last frame */
-	long long m_lastFrameUs;
+	std::chrono::high_resolution_clock::time_point m_lastFrame;
 	/** The length of the last frame in seconds */
-	double m_lastFrameTimeSeconds;
+	std::atomic<float> m_lastFrameTimeSeconds;
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.
@@ -120,5 +121,5 @@ public:
 	* @details This is the time it took for the last frame to execute, recorded from the beginning of the last
 	*	frame to the start of the current frame. It is constant throughout the entire active frame.
 	*/
-	double getFrameTime();
+	float getFrameTime();
 };

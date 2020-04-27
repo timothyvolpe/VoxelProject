@@ -8,11 +8,13 @@
 */
 
 #pragma once
+#include "componentdef.h"
 
 class CGame;
 class CGraphics;
 class CConfig;
 class CUserInput;
+class CWorldRenderer;
 
 /**
 * @brief The client-sided handler.
@@ -29,8 +31,11 @@ private:
 
 	CGraphics *m_pGraphics;
 	CConfig *m_pClientConfig;
+	CWorldRenderer* m_pWorldRenderer;
 
 	CUserInput *m_pUserInput;
+
+	Entity testEntity;
 
 	void handleSDLEvents();
 

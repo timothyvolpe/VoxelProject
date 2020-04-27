@@ -14,8 +14,6 @@ CGame::CGame()
 	m_pClient = 0;
 	m_pServer = 0;
 
-	m_currentTimeUs = 0;
-	m_lastFrameUs = 0;
 	m_lastFrameTimeSeconds = 0;
 }
 CGame::~CGame() {
@@ -47,8 +45,7 @@ bool CGame::initialize()
 		return false;
 
 	// so that the frame time isnt huge or 0
-	auto curtime = std::chrono::high_resolution_clock::now().time_since_epoch();
-	m_lastFrameUs = std::chrono::duration_cast<std::chrono::microseconds>(curtime).count();
+	m_lastFrame = std::chrono::high_resolution_clock::now();
 
 	return true;
 }
@@ -83,9 +80,9 @@ bool CGame::startGame()
 	while( m_bRunning )
 	{
 		// Calculate time elapsed since last frame
-		auto curtime = std::chrono::high_resolution_clock::now().time_since_epoch();
-		m_currentTimeUs = std::chrono::duration_cast<std::chrono::microseconds>(curtime).count();
-		m_lastFrameTimeSeconds = (m_currentTimeUs - m_lastFrameTimeSeconds) * 1000000;
+		m_currentTime = std::chrono::high_resolution_clock::now();
+		m_lastFrameTimeSeconds = std::chrono::duration_cast<std::chrono::microseconds>(m_currentTime - m_lastFrame).count() * 1000000.0f;
+		m_lastFrame = m_currentTime;
 
 		// Update server
 		if( !m_pServer->update() )
@@ -119,6 +116,6 @@ CClient* CGame::getClient() {
 	return m_pClient;
 }
 
-double CGame::getFrameTime() {
+float CGame::getFrameTime() {
 	return m_lastFrameTimeSeconds;
 }

@@ -4,18 +4,21 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <chrono>
+#include "componentdef.h"
 
 /** Amount of time in ms to wait for the server thread to join */
 #define SERVER_JOIN_TIMEOUT_MS 5000
 
 class CGame;
 class CEntityManager;
+class CWorld;
 
 /**
 * @brief The server-sided handler.
 * @details This class is in charge of everything that happens only on the server and is not shared
 *	with the client. That includes server sided entities, players, etc.
-
+*
 * @author Timothy Volpe
 * @date 4/26/2020
 */
@@ -30,7 +33,23 @@ private:
 	std::atomic<bool> m_serverRunning;
 	std::condition_variable m_serverStartedFlag, m_serverStoppedFlag;
 
+	std::chrono::high_resolution_clock::time_point m_currentTime;
+	std::chrono::high_resolution_clock::time_point m_lastUpdate;
+	float m_lastUpdateTimeSeconds;
+
+	CWorld *m_pWorld;
+
+	Entity testEntity;
+
 	void threadMain();
+	void threadMainBody();
+	/** Server-thread cleanup method, don't call from main thread */
+	void cleanupServer();
+
+	/**
+	* @brief Internal server update function, which runs indepedently of the game loop update
+	*/
+	bool serverUpdate();
 public:
 	CServer( CGame* pGameHandle );
 	~CServer();
@@ -55,5 +74,9 @@ public:
 	*/
 	void shutdownServer();
 
+	/**
+	* @brief Update the main thread and check the status of the server
+	* @details Returns true if server is okay, false if otherwise.
+	*/
 	bool update();
 };
