@@ -9,6 +9,7 @@
 #define SERVER_JOIN_TIMEOUT_MS 5000
 
 class CGame;
+class CEntityManager;
 
 /**
 * @brief The server-sided handler.
@@ -16,7 +17,7 @@ class CGame;
 *	with the client. That includes server sided entities, players, etc.
 
 * @author Timothy Volpe
-* @date 12/15/2019
+* @date 4/26/2020
 */
 class CServer
 {

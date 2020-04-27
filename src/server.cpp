@@ -2,11 +2,14 @@
 #include "server.h"
 #include "game.h"
 #include "logger.h"
+#include "components.h"
 
-CServer::CServer( CGame* pGameHandle ) : m_pGameHandle( pGameHandle ) {
+CServer::CServer( CGame* pGameHandle ) : m_pGameHandle( pGameHandle )
+{
 	m_serverRunning = false;
 }
-CServer::~CServer() {
+CServer::~CServer()
+{
 	if( m_serverRunning )
 		this->shutdownServer();
 }
