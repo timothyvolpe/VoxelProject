@@ -31,3 +31,23 @@ Requires Microsoft Visual Studio Redistributable 2015 (x64)
 Notes for Compiling SDL:
 For release builds, had to change runtime library to Multi-threaded DLL (/MD)
 Had to add vcruntimed.lib, ucrtd.lib to SDL project dependencies for debug build
+
+Version History
+
+Version 0.1.1:
+-Added SDL
+-Added CClient and CServer classes
+-Added CGraphics class
+-Added CWindow class
+
+Version 0.1.2
+-Removed unnecessary CWindow class and moved SDL window to CGraphics
+-Added config files
+
+Planned Changes
+
+Version 0.2
+-Camera movement
+-User config settings
+-Basic entity-component-system archtectire
+-Reference entities rendered
