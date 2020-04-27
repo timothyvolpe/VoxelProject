@@ -3,9 +3,8 @@
 #include "componentdef.h"
 
 class CGame;
-class CEntityManager;
-class CComponentManager;
-class CSystemManager;
+
+class CECSCoordinator;
 
 class CRenderSystem;
 
@@ -20,9 +19,7 @@ class CWorld
 private:
 	CGame* m_pGameHandle;
 
-	CEntityManager* m_pWorldEntities;
-	CComponentManager* m_pWorldComponents;
-	CSystemManager* m_pWorldSystems;
+	CECSCoordinator* m_pWorldEntCoordinator;
 public:
 	CWorld( CGame* pGameHandle );
 	~CWorld();
@@ -41,10 +38,9 @@ public:
 	* @brief Creates an entity in the world identified by an ID
 	* @details This will register an entity with the entity manager and create its necessary components.
 	* @param[in]	signature	The signature to assign to the entity. The 3D position bit will automatically be set.
-	* @param[out]	pEntity		The created entities ID will be stored here.
-	* @returns Returns true if the entity creation was successful, or false otherwise.
+	* @param[out]	pEntity		The created entities ID will be stored here. Will be 0 if there was a failure.
 	*/
-	bool createEntity( ComponentSignature signature, Entity *pEntity );
+	void createEntity( ComponentSignature signature, Entity *pEntity );
 
 	/**
 	* @brief Destroys an entity in the world identified by an ID

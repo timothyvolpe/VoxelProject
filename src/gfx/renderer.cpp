@@ -6,10 +6,6 @@
 
 CWorldRenderer::CWorldRenderer( CGame* pGameHandle ) : m_pGameHandle( pGameHandle )
 {
-	m_pClientEntities = 0;
-	m_pClientComponents = 0;
-	m_pClientSystems = 0;
-
 	m_renderSystem = 0;
 }
 CWorldRenderer::~CWorldRenderer()
@@ -20,58 +16,44 @@ CWorldRenderer::~CWorldRenderer()
 bool CWorldRenderer::initialize()
 {
 	// Setup ECS stuff
-	m_pClientEntities = new CEntityManager( LOCAL_ID_RANGE_START, SHARED_ID_RANGE_START );
+	m_pClientEntCoordinator = new CECSCoordinator( m_pGameHandle, LOCAL_ID_RANGE_START, SHARED_ID_RANGE_START );
 
-	m_pClientComponents = new CComponentManager();
-	m_pClientComponents->RegisterComponent<Position3DComponent>();
-	m_pClientComponents->RegisterComponent<Transform3DComponent>();
+	m_pClientEntCoordinator->getComponentManager()->RegisterComponent<Position3DComponent>();
+	m_pClientEntCoordinator->getComponentManager()->RegisterComponent<Transform3DComponent>();
 
-	m_pClientSystems = new CSystemManager();
-	m_renderSystem = m_pClientSystems->RegisterSystem<CRenderSystem>();
+	ComponentSignature renderSig;
+	renderSig.set( m_pClientEntCoordinator->getComponentManager()->GetComponentTypeId<Position3D>() );
+	m_renderSystem = m_pClientEntCoordinator->getSystemManager()->RegisterSystem<CRenderSystem>( renderSig );
 
 	return true;
 }
 void CWorldRenderer::destroy()
 {
-	if( m_pClientSystems ) {
-		delete m_pClientSystems;
-		m_pClientSystems = 0;
-	}
-	if( m_pClientComponents ) {
-		delete m_pClientComponents;
-		m_pClientComponents = 0;
-	}
-	if( m_pClientEntities ) {
-		delete m_pClientEntities;
-		m_pClientEntities = 0;
+	if( m_pClientEntCoordinator ) {
+		delete m_pClientEntCoordinator;
+		m_pClientEntCoordinator = 0;
 	}
 }
 
-bool CWorldRenderer::createClientEntity( ComponentSignature signature, Entity *pEntity )
+void CWorldRenderer::createClientEntity( ComponentSignature signature, Entity *pEntity )
 {
-	Entity newEntity;
+	// Add 3d position
+	signature.set( m_pClientEntCoordinator->getComponentManager()->GetComponentTypeId<Position3D>() );
 
-	// Set 3D transform bit
-	signature.set( m_pClientComponents->GetComponentTypeId<Position3DComponent>() );
-
-	// Create the entity with the manager
-	if( !m_pClientEntities->CreateEntity( signature, &newEntity ) ) {
-		m_pGameHandle->getLogger()->printError( "Failed to create entity, either because maximum entities was reached or the signature was invalid." );
-		return false;
-	}
-
-	Position3DComponent transform =glm::vec3( 0, 0, 0 );
-	m_pClientComponents->AddComponent<Position3DComponent>( newEntity, transform );
-
-	(*pEntity) = newEntity;
-
-	return true;
+	m_pClientEntCoordinator->createEntity( signature, pEntity );
 }
 
 void CWorldRenderer::destroyClientEntity( Entity entity )
 {
-	ComponentSignature signature = m_pClientEntities->GetSignature( entity );
-	m_pClientEntities->DestroyEntity( entity );
-	//m_pWorldComponents->EntityDestroy( signature );
-	m_pGameHandle->getLogger()->printWarn( "Fix entity destruction" );
+	m_pClientEntCoordinator->removeEntity( entity );
+}
+
+bool CWorldRenderer::update( float deltaT )
+{
+	return true;
+}
+
+void CWorldRenderer::render()
+{
+	m_renderSystem->update( 0 );
 }

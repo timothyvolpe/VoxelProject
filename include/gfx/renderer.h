@@ -3,16 +3,14 @@
 
 class CGame;
 
-class CEntityManager;
-class CComponentManager;
-class CSystemManager;
+class CECSCoordinator;
 
 class CRenderSystem;
 
 /**
 * @brief The client-sided renderer, which renders 3D world objects.
 * @details The world renderer handles networked entities from the server, as well as client-sided only entities.
-*	All world entities have a 3D position.
+*	All world entities have a 3D position. This class also handles updating these entities but does mostly rendering.
 *
 * @author Timothy Volpe
 * @date 12/10/2019
@@ -22,9 +20,7 @@ class CWorldRenderer
 private:
 	CGame* m_pGameHandle;
 
-	CEntityManager* m_pClientEntities;
-	CComponentManager* m_pClientComponents;
-	CSystemManager* m_pClientSystems;
+	CECSCoordinator* m_pClientEntCoordinator;
 
 	std::shared_ptr<CRenderSystem> m_renderSystem;
 public:
@@ -46,9 +42,9 @@ public:
 	* @brief Create an entity that is only available on the client
 	* @details This creates and registers an entity only on the client.
 	* @param[in]	signature	The signature to assign to the entity. The 3D position bit will automatically be set.
-	* @param[out]	pEntity		The created entities ID will be stored here.
+	* @param[out]	pEntity		The created entities ID will be stored here. Will be 0 if there was a failure.
 	*/
-	bool createClientEntity( ComponentSignature signature, Entity *pEntity );
+	void createClientEntity( ComponentSignature signature, Entity *pEntity );
 	/**
 	* @brief Destroy an entity on the client
 	* @details This destroys a client-sided entity. The entity must have been created as a client-sided entity
@@ -56,4 +52,14 @@ public:
 	* @param[in]	entity	The entity ID to delete
 	*/
 	void destroyClientEntity( Entity entity );
+
+	/**
+	* @brief Update the client-sided entities but do not run the render system
+	* @returns True if update was successful, false if otherwise
+	*/
+	bool update( float deltaT );
+	/**
+	* @brief Update the render system
+	*/
+	void render();
 };

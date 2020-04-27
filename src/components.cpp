@@ -1,3 +1,6 @@
+#include <algorithm>
+#include "game.h"
+#include "logger.h"
 #include "components.h"
 
 ////////////////////
@@ -71,6 +74,137 @@ bool CEntityManager::SetSignature( Entity entity, ComponentSignature signature )
 	return true;
 }
 
+////////////////
+// Components //
+////////////////
+
+void CComponentManager::AddDefaultComponents( ComponentSignature signature, Entity entity )
+{
+	for( ComponentType i = 0; i < COMPONENT_TYPE_MAX; i++ )
+	{
+		// Check if set
+		if( signature[i] )
+		{
+			assert( m_componentTypeNameMap.find( i ) != m_componentTypeNameMap.end() );
+
+			// Find in component type map
+			const char *pTypeName = m_componentTypeNameMap[i];
+			assert( m_componentArrays.find( pTypeName ) != m_componentArrays.end() );
+			m_componentArrays[pTypeName]->AddEmptyComponent( entity );
+		}
+	}
+}
+void CComponentManager::RemoveAllComponents( ComponentSignature signature, Entity entity )
+{
+	for( ComponentType i = 0; i < COMPONENT_TYPE_MAX; i++ )
+	{
+		// Check if set
+		if( signature[i] )
+		{
+			assert( m_componentTypeNameMap.find( i ) != m_componentTypeNameMap.end() );
+
+			// Find in component type map
+			const char *pTypeName = m_componentTypeNameMap[i];
+			assert( m_componentArrays.find( pTypeName ) != m_componentArrays.end() );
+			m_componentArrays[pTypeName]->DestroyEntitiesComponent( entity );
+		}
+	}
+}
+
+void CComponentManager::EntityDestroy( ComponentSignature signature, Entity entity )
+{
+	for( auto it: m_componentArrays )
+	{
+		it.second->DestroyEntitiesComponent( entity );
+	}
+}
+
 /////////////
 // Systems //
 /////////////
+
+void CSystemBase::addEntity( Entity entity )
+{
+	assert( m_entities.size() <= ENTITY_MAX );
+
+	// Add to vector
+	m_entities.push_back( entity );
+}
+
+void CSystemBase::removeEntity( Entity entity )
+{
+	assert( m_entities.size() <= ENTITY_MAX );
+	// Remove from vector
+	m_entities.erase( std::remove( m_entities.begin(), m_entities.end(), entity ), m_entities.end() );
+}
+
+void CSystemManager::AddEntityToSystems( ComponentSignature signature, Entity entity )
+{
+	for( auto it: m_systemSignatures ) {
+		// Check if they share the system signature bits
+		if( (signature & it.second) == it.second ) {
+			m_systemArray[it.first]->addEntity( entity );
+		}
+	}
+}
+void CSystemManager::RemoveEntityFromAll( ComponentSignature signature, Entity entity )
+{
+	for( auto it: m_systemSignatures ) {
+		// Check if they share the system signature bits
+		if( (signature & it.second) == it.second ) {
+			m_systemArray[it.first]->removeEntity( entity );
+		}
+	}
+}
+
+/////////////////
+// Coordinator //
+/////////////////
+
+CECSCoordinator::CECSCoordinator( CGame* pGameHandle, EntityInt idRangeStart, EntityInt idRangeStop ) : m_pGameHandle( pGameHandle )
+{
+	m_pEntityManager = new CEntityManager( idRangeStart, idRangeStop );
+	m_pComponentManager = new CComponentManager();
+	m_pSystemManager = new CSystemManager();
+}
+CECSCoordinator::~CECSCoordinator()
+{
+	if( m_pEntityManager )
+		delete m_pEntityManager;
+	if( m_pComponentManager )
+		delete m_pComponentManager;
+	if( m_pSystemManager )
+		delete m_pSystemManager;
+}
+
+void CECSCoordinator::createEntity( ComponentSignature signature, Entity* pEntity )
+{
+	Entity newEntity;
+
+	(*pEntity) = 0;
+
+	// Allocate entity ID
+	if( !m_pEntityManager->CreateEntity( signature, &newEntity ) ) {
+		m_pGameHandle->getLogger()->printError( "Failed to create entity either because the signature was invalid or max entities was reached." );
+		return;
+	}
+	// Add appropriate components
+	m_pComponentManager->AddDefaultComponents( signature, newEntity );
+	// Register to the appropriate systems
+	m_pSystemManager->AddEntityToSystems( signature, newEntity );
+
+	(*pEntity) = newEntity;
+}
+
+void CECSCoordinator::removeEntity( Entity entity )
+{
+	// Get entity signature
+	ComponentSignature signature = m_pEntityManager->GetSignature( entity );
+
+	// Free entity ID
+	m_pEntityManager->DestroyEntity( entity );
+	// Delete appropriate components
+	m_pComponentManager->RemoveAllComponents( signature, entity );
+	// Remove from appropriate systems
+	m_pSystemManager->RemoveEntityFromAll( signature, entity );
+}

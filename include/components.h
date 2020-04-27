@@ -8,6 +8,8 @@
 #include "entity.h"
 #include "componentdef.h"
 
+class CGame;
+
 //////////////
 // Entities //
 //////////////
@@ -88,6 +90,8 @@ public:
 class IComponentArray
 {
 public:
+	virtual bool AddEmptyComponent( Entity entity ) = 0;
+
 	virtual void DestroyEntitiesComponent( Entity entity ) = 0;
 };
 
@@ -138,6 +142,16 @@ public:
 		m_activeComponents++;
 
 		return true;
+	}
+
+	/**
+	* @brief Adds a blank component for a given entity
+	* @param[in]	entity	The entity to add the component for
+	* @returns See CComponentArray::InsertComponent
+	*/
+	bool AddEmptyComponent( Entity entity )
+	{
+		return this->InsertComponent( entity, T{} );
 	}
 
 	/**
@@ -197,6 +211,7 @@ class CComponentManager
 {
 private:
 	std::unordered_map<const char*, ComponentType> m_componentTypes;
+	std::unordered_map<ComponentType, const char*> m_componentTypeNameMap;
 	std::unordered_map<const char*, std::shared_ptr<IComponentArray>> m_componentArrays;
 
 	ComponentType m_activeComponentTypes;
@@ -237,6 +252,7 @@ public:
 
 		// Add to the component type map identifier
 		m_componentTypes.insert( std::pair<const char*, ComponentType>( typeName, m_activeComponentTypes ) );
+		m_componentTypeNameMap.insert( std::pair<ComponentType, const char*>( m_activeComponentTypes, typeName ) );
 		m_componentArrays.insert( std::pair<const char*, std::shared_ptr<IComponentArray>>( typeName, std::make_shared<CComponentArray<T>>() ) );
 		m_activeComponentTypes++;
 
@@ -278,18 +294,26 @@ public:
 	}
 
 	/**
+	* @brief Add empty components for each item in the signature for the given entity.
+	* @param[in]	signature	The signature defining which components to add
+	* @param[in]	entity		The entity to add the components for
+	*/
+	void AddDefaultComponents( ComponentSignature signature, Entity entity );
+
+	/**
+	* @brief Remove all the components of a given entity based on the signature.
+	* @param[in]	signature	Defines which components to remove.
+	* @param[in]	entity		The entity whose components to remove.
+	*/
+	void RemoveAllComponents( ComponentSignature signature, Entity entity );
+
+	/**
 	* @brief Called when an entity is destroyed.
 	* @details Checks entity for component types and destroys the entities valid components.
 	* @param[in]	signature	The signature of the destroyed entity, used to find components.
 	* @param[in]	entity		The entity ID of the destroyed entity
 	*/
-	void EntityDestroy( ComponentSignature signature, Entity entity )
-	{
-		for( auto it: m_componentArrays )
-		{
-			it.second->DestroyEntitiesComponent( entity );
-		}
-	}
+	void EntityDestroy( ComponentSignature signature, Entity entity );
 };
 
 /////////////
@@ -305,6 +329,17 @@ public:
 	virtual void shutdown() = 0;
 
 	virtual bool update( float deltaT ) = 0;
+
+	/**
+	* @brief Add an entity to be update by the system
+	* @param[in]	entity	The entity to add to the system
+	*/
+	void addEntity( Entity entity );
+	/**
+	* @brief Remove an entity to be updated by the system
+	* @param[in]	entity	The entity to remove from the system
+	*/
+	void removeEntity( Entity entity );
 };
 
 
@@ -320,27 +355,85 @@ class CSystemManager
 {
 private:
 	std::unordered_map<const char*, std::shared_ptr<CSystemBase>> m_systemArray;
+	std::unordered_map<const char*, ComponentSignature> m_systemSignatures;
 public:
 
 	/**
 	* @brief Registers a system with the manager.
 	* @details If the system has already been registered, the registration will fail. A pointer to the system
-	*	is returned by the function if successfully registered the system.
+	*	is returned by the function if successfully registered the system. The signature defines which entities the system will pay attention to.
+	* @param[in]	signature	The signature of entities for the system to update.
 	* @returns Returns a pointer to the system if the registration was successful. If it failed, it will return a null pointer.
 	*/
 	template<typename T>
-	std::shared_ptr<T> RegisterSystem()
+	std::shared_ptr<T> RegisterSystem( ComponentSignature signature )
 	{
 		const char* typeName = typeid(T).name();
 
 		assert( m_systemArray.find( typeName ) == m_systemArray.end() );
+		assert( !signature.none() );
 
 		if( m_systemArray.find( typeName ) != m_systemArray.end() )
 			return 0;
 
 		std::shared_ptr<T> system = std::make_shared<T>();
 		m_systemArray.insert( std::pair<const char*, std::shared_ptr<CSystemBase>>( typeName, system ) );
+		m_systemSignatures.insert( std::pair<const char*, ComponentSignature>( typeName, signature ) );
 
 		return system;
 	}
+
+	/**
+	* @brief Add an entity to the approriate signatures, based on the givem signature.
+	* @param[in]	signature	The signature used to identify which systems to add the entity to.
+	* @param[in]	entity		The entity to add to the systems.
+	*/
+	void AddEntityToSystems( ComponentSignature signature, Entity entity );
+
+	/**
+	* @brief Remove an entity from all the appropriate systems, based on given signature.
+	* @param[in]	signature	The signature used to identify which systems to remove the entity from.
+	* @param[in]	entity		The entity to remove from the systems.
+	*/
+	void RemoveEntityFromAll( ComponentSignature signature, Entity entity );
+};
+
+/**
+* @brief Manages a group of entity-component-system managers.
+* @details This allows each manager to talk to itself. See https://austinmorlan.com/posts/entity_component_system/
+*
+* @author Timothy Volpe
+* @date 4/27/2020
+*/
+class CECSCoordinator
+{
+private:
+	CGame* m_pGameHandle;
+
+	CEntityManager* m_pEntityManager;
+	CComponentManager* m_pComponentManager;
+	CSystemManager* m_pSystemManager;
+public:
+	CECSCoordinator( CGame* pGameHandle, EntityInt idRangeStart, EntityInt idRangeStop );
+	~CECSCoordinator();
+
+	inline CEntityManager* getEntityManager() { return m_pEntityManager; }
+	inline CComponentManager* getComponentManager() { return m_pComponentManager; }
+	inline CSystemManager* getSystemManager() { return m_pSystemManager; }
+
+	/**
+	* @brief Create an entity and its components, and register it with the required systems.
+	* @details The entity ID will be allocated, its signature will defined which components are created for it,
+	*	as well as which systems it will be registered to.
+	* @param[in]	signature	The signature to assign to the entity. The 3D position bit will automatically be set.
+	* @param[out]	pEntity		The created entities ID will be stored here. Will be 0 if there was a failure.
+	*/
+	void createEntity( ComponentSignature signature, Entity* pEntity );
+
+	/**
+	* @brief Remove an entity, freeing up its ID and components.
+	* @details The entity ID will be made available again, its components will be deleted and it will be
+	*	unregistered from its systems.
+	*/
+	void removeEntity( Entity entity );
 };

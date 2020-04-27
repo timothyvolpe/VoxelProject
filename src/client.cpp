@@ -37,7 +37,8 @@ bool CClient::initialize()
 
 	m_pUserInput = new CUserInput();
 
-	if( !m_pWorldRenderer->createClientEntity( ComponentSignature(), &testEntity ) ) {
+	m_pWorldRenderer->createClientEntity( ComponentSignature(), &testEntity );
+	if( !testEntity ) {
 		m_pGameHandle->getLogger()->printError( "Failed to create test entity" );
 		return false;
 	}
@@ -121,10 +122,16 @@ bool CClient::update()
 	if( m_pUserInput->isKeyPressed( SDL_SCANCODE_ESCAPE ) )
 		m_pGameHandle->quitGame();
 
+	// Update the client sided entities
+	m_pWorldRenderer->update( m_pGameHandle->getFrameTime() );
+
 	return true;
 }
 bool CClient::render()
 {
+	// Render the client and networked entities
+	m_pWorldRenderer->render();
+
 	m_pGraphics->draw();
 
 	return true;

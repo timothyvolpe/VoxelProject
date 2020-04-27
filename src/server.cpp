@@ -51,7 +51,8 @@ void CServer::threadMainBody()
 		return;
 
 	// Create a test entity
-	if( !m_pWorld->createEntity( ComponentSignature(), &testEntity ) ) {
+	m_pWorld->createEntity( ComponentSignature(), &testEntity );
+	if( !testEntity ) {
 		m_pGameHandle->getLogger()->printError( "Failed to create test entity" );
 		return;
 	}
