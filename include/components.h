@@ -323,8 +323,13 @@ public:
 class CSystemBase
 {
 protected:
+	CGame *m_pGameHandle;
+
 	std::vector<Entity> m_entities;
 public:
+	CSystemBase();
+	CSystemBase( CGame *pGameHandle );
+
 	virtual bool initialize() = 0;
 	virtual void shutdown() = 0;
 
@@ -354,9 +359,12 @@ public:
 class CSystemManager
 {
 private:
+	CGame* m_pGameHandle;
+
 	std::unordered_map<const char*, std::shared_ptr<CSystemBase>> m_systemArray;
 	std::unordered_map<const char*, ComponentSignature> m_systemSignatures;
 public:
+	CSystemManager( CGame* pGameHandle );
 
 	/**
 	* @brief Registers a system with the manager.
@@ -376,7 +384,8 @@ public:
 		if( m_systemArray.find( typeName ) != m_systemArray.end() )
 			return 0;
 
-		std::shared_ptr<T> system = std::make_shared<T>();
+		std::shared_ptr<T> system = std::make_shared<T>( m_pGameHandle );
+		system->initialize();
 		m_systemArray.insert( std::pair<const char*, std::shared_ptr<CSystemBase>>( typeName, system ) );
 		m_systemSignatures.insert( std::pair<const char*, ComponentSignature>( typeName, signature ) );
 

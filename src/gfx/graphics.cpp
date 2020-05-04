@@ -1,5 +1,4 @@
-#include <gl\glew.h>
-#include <GL\GL.h>
+#include <algorithm>
 #include "gfx\graphics.h"
 #include "gfx\shader.h"
 #include "game.h"
@@ -9,6 +8,10 @@
 
 int CGraphics::SDLReferenceCount = 0;
 bool CGraphics::GLEWInitialized = false;
+
+///////////////
+// CGraphics //
+///////////////
 
 CGraphics::CGraphics( CGame *pGameHandle )
 {
@@ -159,4 +162,119 @@ void CGraphics::destroy()
 		SDL_Quit();
 	}
 	m_pGameHandle = 0;
+}
+
+///////////////////
+// CBufferObject //
+///////////////////
+
+CBufferObject::CBufferObject()
+{
+	m_bufferId = 0;
+}
+CBufferObject::~CBufferObject()
+{
+	this->destroy();
+}
+
+bool CBufferObject::create()
+{
+	assert( !m_bufferId );
+
+	GLenum glError;
+
+	glGenBuffers( 1, &m_bufferId );
+	if( (glError = glGetError()) != GL_NO_ERROR ) {
+		m_bufferId = 0;
+		return false;
+	}
+	return true;
+}
+void CBufferObject::destroy()
+{
+	if( m_bufferId ) {
+		glDeleteBuffers( 1, &m_bufferId );
+		m_bufferId = 0;
+	}
+}
+
+void CBufferObject::bind( GLenum target )
+{
+	assert( m_bufferId );
+
+	glBindBuffer( target, m_bufferId );
+}
+
+//////////////////
+// CVertexArray //
+//////////////////
+
+CVertexArray::CVertexArray( CGame* pGameHandle ) : m_pGameHandle( pGameHandle )
+{
+	m_vaoId = 0;
+}
+CVertexArray::~CVertexArray()
+{
+	this->destroy();
+}
+
+bool CVertexArray::create()
+{
+	assert( !m_vaoId );
+
+	GLenum glError;
+
+	glGenVertexArrays( 1, &m_vaoId );
+	if( (glError = glGetError()) != GL_NO_ERROR ) {
+		m_vaoId = 0;
+		m_pGameHandle->getLogger()->printError( "Failed to generate vertex array, GL error code %u", glError );
+		return false;
+	}
+	return true;
+}
+void CVertexArray::destroy()
+{
+	if( m_vaoId ) {
+		glDeleteVertexArrays( 1, &m_vaoId );
+		m_vaoId = 0;
+	}
+}
+
+void CVertexArray::bind()
+{
+	assert( m_vaoId );
+
+	glBindVertexArray( m_vaoId );
+}
+
+void CVertexArray::addBuffer( std::shared_ptr<CBufferObject> bufferObject, GLenum target )
+{
+	assert( bufferObject );
+
+	m_buffersToBind.push_back( BufferPair( target, bufferObject ) );
+}
+
+bool CVertexArray::flushBinds()
+{
+	assert( m_vaoId );
+	assert( !m_buffersToBind.empty() );
+
+	GLenum glError;
+
+	this->bind();
+	if( (glError = glGetError()) != GL_NO_ERROR ) {
+		m_pGameHandle->getLogger()->printError( "Failed to bind vertex array, GL error code %u", glError );
+		return false;
+	}
+
+	for( auto it: m_buffersToBind )
+	{
+		glBindBuffer( it.first, it.second->getBufferId() );
+		if( (glError = glGetError()) != GL_NO_ERROR ) {
+			m_pGameHandle->getLogger()->printError( "Failed to bind buffer object, GL error code %u", glError );
+			return false;
+		}
+	}
+
+	return true;
 }

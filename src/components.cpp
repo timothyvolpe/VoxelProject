@@ -123,6 +123,13 @@ void CComponentManager::EntityDestroy( ComponentSignature signature, Entity enti
 // Systems //
 /////////////
 
+CSystemBase::CSystemBase() {
+	m_pGameHandle = 0;
+}
+CSystemBase::CSystemBase( CGame *pGameHandle ) {
+	m_pGameHandle = pGameHandle;
+}
+
 void CSystemBase::addEntity( Entity entity )
 {
 	assert( m_entities.size() <= ENTITY_MAX );
@@ -136,6 +143,10 @@ void CSystemBase::removeEntity( Entity entity )
 	assert( m_entities.size() <= ENTITY_MAX );
 	// Remove from vector
 	m_entities.erase( std::remove( m_entities.begin(), m_entities.end(), entity ), m_entities.end() );
+}
+
+CSystemManager::CSystemManager( CGame* pGameHandle ) {
+	m_pGameHandle = pGameHandle;
 }
 
 void CSystemManager::AddEntityToSystems( ComponentSignature signature, Entity entity )
@@ -165,7 +176,7 @@ CECSCoordinator::CECSCoordinator( CGame* pGameHandle, EntityInt idRangeStart, En
 {
 	m_pEntityManager = new CEntityManager( idRangeStart, idRangeStop );
 	m_pComponentManager = new CComponentManager();
-	m_pSystemManager = new CSystemManager();
+	m_pSystemManager = new CSystemManager( pGameHandle );
 }
 CECSCoordinator::~CECSCoordinator()
 {
