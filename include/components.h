@@ -9,6 +9,7 @@
 #include "componentdef.h"
 
 class CGame;
+class CECSCoordinator;
 
 //////////////
 // Entities //
@@ -179,15 +180,13 @@ public:
 	/**
 	* @brief Get the value of a component associated with the given entity
 	* @param[in]	entity		The entity whose component to retrieve
-	* @param[out]	pComponent	The component associated with the entity is stored here.
+	* @returns A reference to the component stored for the given entity.
 	*/
-	void GetComponent( Entity entity, T* pComponent )
+	T& GetComponent( Entity entity )
 	{
 		assert( m_entityToIndexMap.find( entity ) != m_entityToIndexMap.end() );
 
-		(*pComponent) = entity;
-
-		return true;
+		return m_componentArray[m_entityToIndexMap[entity]];
 	}
 
 	/**
@@ -272,6 +271,17 @@ public:
 	}
 
 	/**
+	* @brief Returns a reference to an entities component data.
+	* @detail The component retrieved will be of the type specified by the template.
+	* @returns A reference to the entities component data.
+	*/
+	template<typename T>
+	T& GetComponent( Entity entity )
+	{
+		return this->GetComponentArray<T>()->GetComponent( entity );
+	}
+
+	/**
 	* @brief Add a component to a component type.
 	* @details See CComponentArray::InsertComponent for more information. 
 	* @param[in]	entity		The entity whose component to add
@@ -324,14 +334,17 @@ class CSystemBase
 {
 protected:
 	CGame *m_pGameHandle;
+	CECSCoordinator* m_pCoordinatorHandle;
 
 	std::vector<Entity> m_entities;
 public:
 	CSystemBase();
-	CSystemBase( CGame *pGameHandle );
+	CSystemBase( CGame *pGameHandle, CECSCoordinator *pCoordinatorHandle );
 
 	virtual bool initialize() = 0;
 	virtual void shutdown() = 0;
+
+	virtual bool onLoad() { return true; }
 
 	virtual bool update( float deltaT ) = 0;
 
@@ -360,11 +373,12 @@ class CSystemManager
 {
 private:
 	CGame* m_pGameHandle;
+	CECSCoordinator* m_pCoordinatorHandle;
 
 	std::unordered_map<const char*, std::shared_ptr<CSystemBase>> m_systemArray;
 	std::unordered_map<const char*, ComponentSignature> m_systemSignatures;
 public:
-	CSystemManager( CGame* pGameHandle );
+	CSystemManager( CGame* pGameHandle, CECSCoordinator *pCoordinatorHandle );
 
 	/**
 	* @brief Registers a system with the manager.
@@ -384,7 +398,7 @@ public:
 		if( m_systemArray.find( typeName ) != m_systemArray.end() )
 			return 0;
 
-		std::shared_ptr<T> system = std::make_shared<T>( m_pGameHandle );
+		std::shared_ptr<T> system = std::make_shared<T>( m_pGameHandle, m_pCoordinatorHandle );
 		system->initialize();
 		m_systemArray.insert( std::pair<const char*, std::shared_ptr<CSystemBase>>( typeName, system ) );
 		m_systemSignatures.insert( std::pair<const char*, ComponentSignature>( typeName, signature ) );
@@ -405,6 +419,11 @@ public:
 	* @param[in]	entity		The entity to remove from the systems.
 	*/
 	void RemoveEntityFromAll( ComponentSignature signature, Entity entity );
+
+	/**
+	* @brief Notify all systems of onLoad command. See CECSCoordinator::onLoad
+	*/
+	bool onLoad();
 };
 
 /**
@@ -445,4 +464,11 @@ public:
 	*	unregistered from its systems.
 	*/
 	void removeEntity( Entity entity );
+
+	/**
+	* @brief Called after world has loaded all its data.
+	* @details Occurs before updating and rendering has been started. Notifies all the child systems.
+	* @returns True if successfully completed loading operations, false if otherwise.
+	*/
+	bool onLoad();
 };

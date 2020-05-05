@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <map>
 #include <memory>
+#include <vector>
 
 #define SHADER_DEF_FILE "shaders.json"
 #define SHADER_COMPILE_LOG "compile.log"
@@ -17,6 +18,7 @@ struct ShaderProgramDefinition
 {
 	std::string programName;
 	std::string vertShader, tessControlShader, tessEvalShader, geomShader, fragShader;
+	std::vector<std::string> uniformNames;
 };
 
 /**
@@ -33,6 +35,8 @@ private:
 
 	std::vector<std::shared_ptr<CShaderProgram>> m_shaderPrograms;
 	std::map<std::string, unsigned int> m_programIndexMap;
+
+	unsigned int m_boundProgramIndex;
 
 	/** Compiles the shader stages passed and stores them in temporary map m_shaderStageObjects */
 	bool compileShaderStages( const std::unordered_set<std::string> &shaderStages, std::map<std::string, std::shared_ptr<CShaderStage>> &compiledStages );
@@ -66,6 +70,19 @@ public:
 	* @returns Returns true if the index was found and stored in pIndex, false if it was not.
 	*/
 	bool getProgramIndex( std::string programName, unsigned int *pIndex );
+
+	/**
+	* @brief Bind a shader program.
+	* @details If the program is already bound, this will have no effect.
+	* param[in]		programIndex	The index of the shader program to bind.
+	*/
+	void bindProgram( unsigned int programIndex );
+
+	/**
+	* @brief Retrieves a pointer to the shader program class, by index.
+	* @returns Pointer to shader program class.
+	*/
+	std::shared_ptr<CShaderProgram> getProgramByIndex( unsigned int programIndex );
 };
 
 /**
@@ -83,6 +100,9 @@ private:
 	std::string m_programName;
 
 	GLuint m_shaderProgramId;
+
+	std::vector<GLint> m_uniformLocations;
+	std::map<std::string, size_t> m_uniformNameToIndex;
 public:
 	CShaderProgram( CGame* pGameHandle, std::string programName );
 	~CShaderProgram();
@@ -100,10 +120,29 @@ public:
 
 	/**
 	* @brief Links the shader program object.
-	* @details Shader objects should be attached prior to calling this function.
+	* @details Shader objects should be attached prior to calling this function. This also finds the uniform locations
+	* @param[in]	uniformNames	The names of the uniforms to search for.
 	* @returns True if successfully linked, or false if otherwise. Errors will be dumped to the #SHADER_LINK_LOG file.
 	*/
-	bool link();
+	bool link( std::vector<std::string> uniformNames );
+
+	/**
+	* @brief Get uniform location from name.
+	* @details Slow lookup to get the uniform index from the uniform name in the lookup table.
+	*	Call this when initializing, then use the index to retrieve the uniform location.
+	* @param[in]	name	The name of the uniform as it is in the shader.
+	* @param[out]	pIndex	Uniform index used to retrieve the uniform location with getUniformLocation.
+	* @returns Returns true if there was an entry for the given name, false if otherwise.
+	*/
+	bool getUniformIndex( std::string name, size_t* pIndex );
+
+	/**
+	* @brief Get the OpenGL uniform location.
+	* @details This retrieves the uniform location used to update the uniforms value.
+	* @param[in]	uniformIndex	The index of the uniform from getUniformIndex
+	* @returns The location of the uniform used to update its location.
+	*/
+	GLint getUniformLocation( size_t uniformIndex );
 
 	inline std::string getProgramName() { return m_programName;  }
 	GLuint getProgramId() { return m_shaderProgramId; }

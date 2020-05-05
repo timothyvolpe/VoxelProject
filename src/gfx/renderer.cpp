@@ -7,6 +7,7 @@
 CWorldRenderer::CWorldRenderer( CGame* pGameHandle ) : m_pGameHandle( pGameHandle )
 {
 	m_renderSystem = 0;
+	m_pClientEntCoordinator = 0;
 }
 CWorldRenderer::~CWorldRenderer()
 {
@@ -46,6 +47,11 @@ void CWorldRenderer::createClientEntity( ComponentSignature signature, Entity *p
 void CWorldRenderer::destroyClientEntity( Entity entity )
 {
 	m_pClientEntCoordinator->removeEntity( entity );
+}
+
+bool CWorldRenderer::onLoad()
+{
+	return m_pClientEntCoordinator->onLoad();
 }
 
 bool CWorldRenderer::update( float deltaT )

@@ -22,9 +22,11 @@
 #include <GL\GL.h>
 #include <memory>
 #include <vector>
+#include <queue>
 
 class CGame;
 class CShaderManager;
+class CVertexArray;
 
 /**
 * @brief Defines which feature sets are support on the client computer
@@ -40,6 +42,15 @@ enum GLSupportLevel : char
 	/** Maximum support, the computer supports OpenGL 4.6+ */
 	GL_SUPPORT_MAX = 3
 };
+
+struct RenderJob
+{
+	std::shared_ptr<CVertexArray> vertexArray;
+	unsigned int shaderIndex;
+	unsigned int vertexCount;
+};
+typedef std::pair<GLuint, unsigned int> ArrayShaderPair;
+bool RenderJobSort( RenderJob& a, RenderJob& b );
 
 /**
 * @brief The graphics handler.
@@ -63,6 +74,8 @@ private:
 	SDL_GLContext m_sdlContext;
 
 	CShaderManager *m_pShaderManager;
+
+	std::vector<RenderJob> m_renderJobs;
 public:
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.
@@ -98,6 +111,21 @@ public:
 	* rendering classes that it is time to draw.
 	*/
 	bool draw();
+
+	/**
+	* @brief Submits a vertex array for rendering when the frame is drawn.
+	* @details The information passed to this function is saved and used to draw the frame. It is cleared after the draw call.
+	* @param[in]	vertexArray		Pointer to the vertex array to render.
+	* @param[in]	shaderIndex		Index of the shader to render with, retrieved from the shader manager.
+	* @param[in]	vertexCount		The number of vertices to render
+	*/
+	void submitForDraw( std::shared_ptr<CVertexArray> vertexArray, unsigned int shaderIndex, unsigned int vertexCount );
+
+	/**
+	* @brief Get shader manager.
+	* @returns The shader manager.
+	*/
+	inline CShaderManager* getShaderManager() { return m_pShaderManager; }
 };
 
 enum OpenGLBufferTypes : uint16_t
@@ -128,16 +156,24 @@ class CBufferObject
 {
 private:
 	GLuint m_bufferId;
+
+	GLenum m_bufferTarget;
+	GLsizeiptr m_bufferSize;
+	std::shared_ptr<void> m_bufferData;
+	GLbitfield m_bufferFlags;
+	GLenum m_bufferUsage;
 public:
 	CBufferObject();
 	~CBufferObject();
 
 	/**
-	* @brief Creates the opengl buffer.
-	* @details Buffer must not have been previously created.
-	* @returns True if successfully created the buffer, false if there was a failure.
+	* @brief Creates the buffer data.
+	* @details This does not actually create the openGL buffer object. The object is not created until the buffer is bound to a vertex array object.
+	*	This function saves the arguments passed to it and uses them to create the buffer object when it is bound to its first VAO.
+	*	See glBufferData and glBufferStorage for information on the parameters.
+	* @warning This means data will not be used until the buffer is bound.
 	*/
-	bool create();
+	void create( GLsizeiptr size, std::shared_ptr<void> data, GLbitfield flags, GLenum usage );
 	/**
 	* @brief Destroys the opengl buffer and frees its resources
 	*/
@@ -145,9 +181,12 @@ public:
 
 	/**
 	* @brief Bind the vertex buffer object to a specific target
+	* @details If the buffer has not been created, it will be created now. It cannot be resized once it has been created,
+	*	it must be destroyed and recreated in order to be resized.
 	* @param[in]	target	The target to bind to, see OpenGL documentation for glBindBuffer
+	* @returns True if successfully bound buffer (and created if necessary), false otherwise.
 	*/
-	void bind( GLenum target );
+	bool bind( GLenum target );
 
 	inline const GLuint getBufferId() { return m_bufferId; }
 };
@@ -161,6 +200,25 @@ public:
 class CVertexArray
 {
 private:
+	enum VertexAttribType
+	{
+		VAT_Special,	// glVertexAttribPointer
+		VAT_Integer,	// glVertexAttribIPointer
+		VAT_Long		// glVertexAttribLPointer
+	};
+	struct VertexAttribPointer
+	{
+		GLuint index;
+		GLint size;
+		GLenum type;
+		GLsizei stride;
+		const void* pointer;
+
+		GLboolean normalized;
+
+		unsigned char internalType;
+	};
+
 	typedef std::pair<GLenum, std::shared_ptr<CBufferObject>> BufferPair;
 
 	CGame* m_pGameHandle;
@@ -169,6 +227,11 @@ private:
 
 	std::vector<BufferPair> m_buffersToBind;
 	std::vector<BufferPair> m_boundBuffers;
+	std::queue<CVertexArray::VertexAttribPointer> m_vertexAttribQueue;
+
+	unsigned int m_vertexAttribsActive;
+
+	GLuint addVertexAttribInternal( unsigned char internalType, GLint size, GLenum type, GLsizei stride, const void *pointer, GLboolean normalized );
 public:
 	CVertexArray( CGame* pGameHandle );
 	~CVertexArray();
@@ -191,15 +254,39 @@ public:
 
 	/**
 	* @brief Add a buffer object to the bind queue. Must flush to bind.
-	* @details Must call flushBinds to actually bind the buffer to the vao
+	* @details This will not automatically bind the buffer. To reduce calls to glBindVertexArray, the buffer will be bound when
+	*	flushBindsAndAttribs is called.
 	* @param[in]	bufferObject	The buffer object to bind.
 	* @param[in]	target			The target to bind the buffer object to.
 	*/
 	void addBuffer( std::shared_ptr<CBufferObject> bufferObject, GLenum target );
 
 	/**
-	* @brief Binds all the buffer objects added with addBuffer and clears queue.
-	* @returns True if successfully bound all buffers, false if something failed.
+	* @brief Adds a vertex attrib to the vertex array object.
+	* @details This will not automatically add the vertex attribute. To reduce calls to glBindVertexArray, the attributes will be bound when 
+	*	flushBindsAndAttribs is called. See glVertexAttribPointer for parameter descriptions.
+	* @returns The index of the added vertex attribute.
 	*/
-	bool flushBinds();
+	GLuint addVertexAttrib( GLint size, GLenum type, GLsizei stride, const void *pointer, GLboolean normalized );
+
+	/**
+	* @brief See addVertexAttrib, performs the same function but for glVertexAttribIPointer.
+	*/
+	GLuint addVertexIAttrib( GLint size, GLenum type, GLsizei stride, const void *pointer );
+	/**
+	* @brief See addVertexAttrib, performs the same function but for glVertexAttribLPointer.
+	*/
+	GLuint addVertexLAttrib( GLint size, GLenum type, GLsizei stride, const void *pointer );
+
+	/**
+	* @brief Binds all the buffer objects waiting to be bound, and adds vertex attribs.
+	* @returns True if successfully bound all buffers and vertex attribs, false if something failed.
+	*/
+	bool flushBindsAndAttribs();
+
+	/**
+	* @brief Get the vertex array id.
+	* @returns Vertex array object id.
+	*/
+	const GLuint getVertexArrayId() { return m_vaoId; }
 };

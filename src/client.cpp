@@ -43,6 +43,10 @@ bool CClient::initialize()
 		return false;
 	}
 
+	// Call on load
+	if( !m_pWorldRenderer->onLoad() )
+		return false;
+
 	return true;
 }
 void CClient::destroy()
@@ -56,7 +60,7 @@ void CClient::destroy()
 		delete m_pUserInput;
 		m_pUserInput = 0;
 	}
-	if( !m_pWorldRenderer ) {
+	if( m_pWorldRenderer ) {
 		m_pWorldRenderer->destroy();
 		delete m_pWorldRenderer;
 		m_pWorldRenderer = 0;

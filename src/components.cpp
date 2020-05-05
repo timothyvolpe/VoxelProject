@@ -126,8 +126,9 @@ void CComponentManager::EntityDestroy( ComponentSignature signature, Entity enti
 CSystemBase::CSystemBase() {
 	m_pGameHandle = 0;
 }
-CSystemBase::CSystemBase( CGame *pGameHandle ) {
+CSystemBase::CSystemBase( CGame *pGameHandle, CECSCoordinator *pCoordinatorHandle ) {
 	m_pGameHandle = pGameHandle;
+	m_pCoordinatorHandle = pCoordinatorHandle;
 }
 
 void CSystemBase::addEntity( Entity entity )
@@ -145,8 +146,9 @@ void CSystemBase::removeEntity( Entity entity )
 	m_entities.erase( std::remove( m_entities.begin(), m_entities.end(), entity ), m_entities.end() );
 }
 
-CSystemManager::CSystemManager( CGame* pGameHandle ) {
+CSystemManager::CSystemManager( CGame* pGameHandle, CECSCoordinator *pCoordinatorHandle ) {
 	m_pGameHandle = pGameHandle;
+	m_pCoordinatorHandle = pCoordinatorHandle;
 }
 
 void CSystemManager::AddEntityToSystems( ComponentSignature signature, Entity entity )
@@ -168,6 +170,15 @@ void CSystemManager::RemoveEntityFromAll( ComponentSignature signature, Entity e
 	}
 }
 
+bool CSystemManager::onLoad()
+{
+	for( auto it: m_systemArray ) {
+		if( !it.second->onLoad() )
+			return false;
+	}
+	return true;
+}
+
 /////////////////
 // Coordinator //
 /////////////////
@@ -176,7 +187,7 @@ CECSCoordinator::CECSCoordinator( CGame* pGameHandle, EntityInt idRangeStart, En
 {
 	m_pEntityManager = new CEntityManager( idRangeStart, idRangeStop );
 	m_pComponentManager = new CComponentManager();
-	m_pSystemManager = new CSystemManager( pGameHandle );
+	m_pSystemManager = new CSystemManager( pGameHandle, this );
 }
 CECSCoordinator::~CECSCoordinator()
 {
@@ -218,4 +229,8 @@ void CECSCoordinator::removeEntity( Entity entity )
 	m_pComponentManager->RemoveAllComponents( signature, entity );
 	// Remove from appropriate systems
 	m_pSystemManager->RemoveEntityFromAll( signature, entity );
+}
+
+bool CECSCoordinator::onLoad() {
+	return m_pSystemManager->onLoad();
 }

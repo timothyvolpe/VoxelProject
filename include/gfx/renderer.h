@@ -54,6 +54,14 @@ public:
 	void destroyClientEntity( Entity entity );
 
 	/**
+	* @brief Called during world loading
+	* @details This is called after the ecs data has been set up, but before updates and rendering begin.
+	*	This allows systems to act on all the entities initially assigned to them.
+	* @returns True if successfully completed load operations, false if otherwise.
+	*/
+	bool onLoad();
+
+	/**
 	* @brief Update the client-sided entities but do not run the render system
 	* @returns True if update was successful, false if otherwise
 	*/

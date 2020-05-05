@@ -14,6 +14,7 @@
 
 CShaderManager::CShaderManager( CGame *pGameHandle ) : m_pGameHandle( pGameHandle )
 {
+	m_boundProgramIndex = 0;
 }
 CShaderManager::~CShaderManager()
 {
@@ -50,6 +51,7 @@ bool CShaderManager::loadPrograms()
 	}
 	catch( const boost::property_tree::json_parser_error &e ) {
 		m_pGameHandle->getLogger()->printError( "Failed to load %s: %s", SHADER_DEF_FILE, e.what() );
+		return false;
 	}
 
 	// Iterate through each shader definition
@@ -108,6 +110,17 @@ bool CShaderManager::loadPrograms()
 			m_pGameHandle->getLogger()->print( "Loading shader stage %s/*.frag...", fragShaderStr.c_str() );
 			programDef.fragShader = (fragShaderStr + "/*.frag");
 			shaderStages.insert( programDef.fragShader );
+		}
+
+		// Get uniforms
+		auto uniformIt = it.second.find( "Uniforms" );
+		if( uniformIt != it.second.not_found() )
+		{
+			if( !(*uniformIt).second.empty() )
+			{
+				for( auto it2: (*uniformIt).second )
+					programDef.uniformNames.push_back( it2.second.get_value<std::string>() );
+			}
 		}
 
 		programDefs.push_back( programDef );
@@ -209,11 +222,11 @@ bool CShaderManager::linkPrograms( const std::map<std::string, std::shared_ptr<C
 			if( !it->attachShader( shaderProgram ) )
 				return false;
 		}
-		if( shaderProgram->link() )
+		if( !shaderProgram->link( (it).uniformNames ) )
 			return false;
 
 		m_shaderPrograms.push_back( shaderProgram );
-		m_programIndexMap.insert( std::pair<std::string, unsigned int>( shaderProgram->getProgramName(), (unsigned int)m_shaderPrograms.size()-1 ) );
+		m_programIndexMap.insert( std::pair<std::string, unsigned int>( shaderProgram->getProgramName(), (unsigned int)m_shaderPrograms.size() ) );
 	}
 
 	return true;
@@ -226,6 +239,19 @@ bool CShaderManager::getProgramIndex( std::string programName, unsigned int *pIn
 		return false;
 	(*pIndex) = (*it).second;
 	return true;
+}
+
+void CShaderManager::bindProgram( unsigned int programIndex )
+{
+	if( m_boundProgramIndex != programIndex ) {
+		glUseProgram( m_shaderPrograms[programIndex-1]->getProgramId() );
+		m_boundProgramIndex = programIndex;
+	}
+}
+
+std::shared_ptr<CShaderProgram> CShaderManager::getProgramByIndex( unsigned int programIndex ) {
+	assert( programIndex <= m_shaderPrograms.size() );
+	return m_shaderPrograms[programIndex-1];
 }
 
 ////////////////////
@@ -260,11 +286,12 @@ void CShaderProgram::deleteProgram()
 	}
 }
 
-bool CShaderProgram::link()
+bool CShaderProgram::link( std::vector<std::string> uniformNames )
 {
 	assert( m_shaderProgramId != 0 );
 
 	GLint glStatus;
+	GLenum glError;
 
 	glLinkProgram( m_shaderProgramId );
 	// Check if link was successful
@@ -294,6 +321,8 @@ bool CShaderProgram::link()
 					fileOut << std::ctime( &time );
 					fileOut << "Program " << m_programName.c_str() << " failed to link\n";
 					fileOut << programLinkLog;
+
+					m_pGameHandle->getLogger()->print( "Failed to link program %s, see %s", m_programName.c_str(), logFilePath.string().c_str() );
 				}
 				else
 					m_pGameHandle->getLogger()->print( "Failed to write shader program link log to %s", logFilePath.c_str() );
@@ -302,7 +331,38 @@ bool CShaderProgram::link()
 		return false;
 	}
 
+	// Find and store uniform locations
+	GLint uniformLoc = 0;
+	for( auto it = uniformNames.begin(); it != uniformNames.end(); it++ )
+	{
+		uniformLoc = glGetUniformLocation( m_shaderProgramId, (*it).c_str() );
+		if( uniformLoc == -1 ) {
+			m_pGameHandle->getLogger()->print( "Failed to find uniform %s in shader program %s", (*it).c_str(), m_programName.c_str() );
+			return false;
+		}
+		if( (glError = glGetError()) != GL_NO_ERROR ) {
+			m_pGameHandle->getLogger()->print( "Failed to find uniform %s in shader program %s, GL error code %u", (*it).c_str(), m_programName.c_str(), glError );
+			return false;
+		}
+		m_uniformNameToIndex.insert( std::pair<std::string, size_t>( (*it), m_uniformLocations.size() ) );
+		m_uniformLocations.push_back( uniformLoc );
+	}
+
 	return true;
+}
+
+bool CShaderProgram::getUniformIndex( std::string name, size_t* pIndex )
+{
+	auto it = m_uniformNameToIndex.find( name );
+	if( it == m_uniformNameToIndex.end() )
+		return false;
+	(*pIndex) = (*it).second;
+	return true;
+}
+
+GLint CShaderProgram::getUniformLocation( size_t uniformIndex ) {
+	assert( uniformIndex < m_uniformLocations.size() );
+	return m_uniformLocations[uniformIndex];
 }
 
 //////////////////
@@ -359,6 +419,8 @@ bool CShaderStage::createFromFile( std::string relPath )
 	GLint glStatus;
 
 	assert( !relPath.empty() );
+
+	m_shaderName = relPath;
 
 	m_pGameHandle->getLogger()->print( "Compiling shader from file %s...", relPath.c_str() );
 
@@ -462,9 +524,11 @@ bool CShaderStage::createFromFile( std::string relPath )
 					fileOut << std::ctime( &time );
 					fileOut << "Shader " << m_shaderName.c_str() << " (" << CShaderStage::getShaderTypeStr( m_shaderType ) << ") failed to compile\n";
 					fileOut << shaderCompileLog;
+
+					m_pGameHandle->getLogger()->print( "Failed to compile shader %s, see %s", m_shaderName.c_str(), logFilePath.string().c_str() );
 				}
 				else
-					m_pGameHandle->getLogger()->print( "Failed to write shader compile log to %s", logFilePath.c_str() );
+					m_pGameHandle->getLogger()->print( "Failed to write shader compile log to %s", logFilePath.string().c_str() );
 			}
 		}
 		return false;

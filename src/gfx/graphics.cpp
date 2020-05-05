@@ -9,6 +9,10 @@
 int CGraphics::SDLReferenceCount = 0;
 bool CGraphics::GLEWInitialized = false;
 
+bool RenderJobSort( RenderJob& a, RenderJob& b ) {
+	return a.shaderIndex < b.shaderIndex;
+}
+
 ///////////////
 // CGraphics //
 ///////////////
@@ -138,6 +142,22 @@ bool CGraphics::draw()
 	// Swap buffers
 	SDL_GL_SwapWindow( m_pSDLWindow );
 
+	// Sort submitted vertex arrays by shader id
+	std::sort( m_renderJobs.begin(), m_renderJobs.end(), RenderJobSort );
+
+	// Draw vertices
+	for( auto it: m_renderJobs )
+	{
+		m_pShaderManager->bindProgram( it.shaderIndex );
+		it.vertexArray->bind();
+		glDrawArrays( GL_POINTS, 0, it.vertexCount );
+	}
+
+	// Reset to old size to maybe save some time
+	size_t pastSize = m_renderJobs.size();
+	m_renderJobs.clear();
+	m_renderJobs.reserve( pastSize );
+
 	return true;
 }
 
@@ -164,6 +184,15 @@ void CGraphics::destroy()
 	m_pGameHandle = 0;
 }
 
+void CGraphics::submitForDraw( std::shared_ptr<CVertexArray> vertexArray, unsigned int shaderIndex, unsigned int vertexCount )
+{
+	assert( vertexArray );
+	assert( vertexArray->getVertexArrayId() );
+	assert( shaderIndex );
+
+	m_renderJobs.push_back( { vertexArray, shaderIndex, vertexCount } );
+}
+
 ///////////////////
 // CBufferObject //
 ///////////////////
@@ -171,24 +200,24 @@ void CGraphics::destroy()
 CBufferObject::CBufferObject()
 {
 	m_bufferId = 0;
+
+	m_bufferSize = 0;
+	m_bufferFlags = 0;
+	m_bufferUsage = 0;
 }
 CBufferObject::~CBufferObject()
 {
 	this->destroy();
 }
 
-bool CBufferObject::create()
+void CBufferObject::create( GLsizeiptr size, std::shared_ptr<void> data, GLbitfield flags, GLenum usage )
 {
-	assert( !m_bufferId );
+	assert( !m_bufferId && !m_bufferData );
 
-	GLenum glError;
-
-	glGenBuffers( 1, &m_bufferId );
-	if( (glError = glGetError()) != GL_NO_ERROR ) {
-		m_bufferId = 0;
-		return false;
-	}
-	return true;
+	m_bufferSize = size;
+	m_bufferData = data;
+	m_bufferFlags = flags;
+	m_bufferUsage = usage;
 }
 void CBufferObject::destroy()
 {
@@ -198,11 +227,28 @@ void CBufferObject::destroy()
 	}
 }
 
-void CBufferObject::bind( GLenum target )
+bool CBufferObject::bind( GLenum target )
 {
-	assert( m_bufferId );
+	GLenum glError;
 
-	glBindBuffer( target, m_bufferId );
+	// if the buffer hasnt actually been created
+	if( !m_bufferId )
+	{
+		glGenBuffers( 1, &m_bufferId );
+		glBindBuffer( target, m_bufferId );
+		if( glewIsSupported( "GL_ARB_buffer_storage" ) )
+			glBufferStorage( target, m_bufferSize, m_bufferData.get(), m_bufferFlags );
+		else
+			glBufferData( target, m_bufferSize, m_bufferData.get(), m_bufferUsage );
+		if( (glError = glGetError()) != GL_NO_ERROR ) {
+			m_bufferId = 0;
+			return false;
+		}
+	}
+	else
+		glBindBuffer( target, m_bufferId );
+
+	return true;
 }
 
 //////////////////
@@ -212,6 +258,7 @@ void CBufferObject::bind( GLenum target )
 CVertexArray::CVertexArray( CGame* pGameHandle ) : m_pGameHandle( pGameHandle )
 {
 	m_vaoId = 0;
+	m_vertexAttribsActive = 0;
 }
 CVertexArray::~CVertexArray()
 {
@@ -238,6 +285,9 @@ void CVertexArray::destroy()
 		glDeleteVertexArrays( 1, &m_vaoId );
 		m_vaoId = 0;
 	}
+	m_vertexAttribsActive = 0;
+	m_buffersToBind.clear();
+	m_vertexAttribQueue = std::queue<CVertexArray::VertexAttribPointer>();
 }
 
 void CVertexArray::bind()
@@ -254,7 +304,32 @@ void CVertexArray::addBuffer( std::shared_ptr<CBufferObject> bufferObject, GLenu
 	m_buffersToBind.push_back( BufferPair( target, bufferObject ) );
 }
 
-bool CVertexArray::flushBinds()
+GLuint CVertexArray::addVertexAttribInternal( unsigned char internalType, GLint size, GLenum type, GLsizei stride, const void *pointer, GLboolean normalized )
+{
+	assert( m_vaoId );
+	assert( m_vertexAttribsActive < GL_MAX_VERTEX_ATTRIBS );
+
+	CVertexArray::VertexAttribPointer attrib;
+	GLuint index;
+	
+	// Determine index
+	index = m_vertexAttribsActive++;
+	// Populate attrib struct
+	attrib = { index, size, type, stride, pointer, normalized, internalType };
+
+	return index;
+}
+GLuint CVertexArray::addVertexAttrib( GLint size, GLenum type, GLsizei stride, const void *pointer, GLboolean normalized ) {
+	return this->addVertexAttribInternal( CVertexArray::VertexAttribType::VAT_Special, size, type, stride, pointer, GL_FALSE );
+}
+GLuint CVertexArray::addVertexIAttrib( GLint size, GLenum type, GLsizei stride, const void *pointer ) {
+	return this->addVertexAttribInternal( CVertexArray::VertexAttribType::VAT_Integer, size, type, stride, pointer, GL_FALSE );
+}
+GLuint CVertexArray::addVertexLAttrib( GLint size, GLenum type, GLsizei stride, const void *pointer ) {
+	return this->addVertexAttribInternal( CVertexArray::VertexAttribType::VAT_Long, size, type, stride, pointer, GL_FALSE );
+}
+
+bool CVertexArray::flushBindsAndAttribs()
 {
 	assert( m_vaoId );
 	assert( !m_buffersToBind.empty() );
@@ -266,12 +341,44 @@ bool CVertexArray::flushBinds()
 		m_pGameHandle->getLogger()->printError( "Failed to bind vertex array, GL error code %u", glError );
 		return false;
 	}
-
+	// Bind buffers waiting
 	for( auto it: m_buffersToBind )
 	{
-		glBindBuffer( it.first, it.second->getBufferId() );
-		if( (glError = glGetError()) != GL_NO_ERROR ) {
+		if( !it.second->bind( it.first ) ) {
 			m_pGameHandle->getLogger()->printError( "Failed to bind buffer object, GL error code %u", glError );
+			return false;
+		}
+	}
+	// Create and enable vertex attribs waiting
+	CVertexArray::VertexAttribPointer attrib;
+	while( !m_vertexAttribQueue.empty() )
+	{
+		attrib = m_vertexAttribQueue.front();
+		m_vertexAttribQueue.pop();
+
+		switch( attrib.internalType )
+		{
+		case CVertexArray::VertexAttribType::VAT_Special:
+			glVertexAttribPointer( attrib.index, attrib.size, attrib.type, attrib.normalized, attrib.stride, attrib.pointer );
+			break;
+		case CVertexArray::VertexAttribType::VAT_Integer:
+			glVertexAttribIPointer( attrib.index, attrib.size, attrib.type, attrib.stride, attrib.pointer );
+			break;
+		case CVertexArray::VertexAttribType::VAT_Long:
+			glVertexAttribLPointer( attrib.index, attrib.size, attrib.type, attrib.stride, attrib.pointer );
+			break;
+		default:
+			assert( false );
+			return false;
+		}
+		if( (glError = glGetError()) != GL_NO_ERROR ) {
+			m_pGameHandle->getLogger()->printError( "Failed to call glVertexAttribPointer, GL error code %u", glError );
+			return false;
+		}
+		// Enable vertex attrib
+		glEnableVertexArrayAttrib( m_vaoId, attrib.index );
+		if( (glError = glGetError()) != GL_NO_ERROR ) {
+			m_pGameHandle->getLogger()->printError( "Failed to call glEnableVertexArrayAttrib, GL error code %u", glError );
 			return false;
 		}
 	}

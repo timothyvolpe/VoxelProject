@@ -87,15 +87,20 @@ public:
 	bool render();
 
 	/**
+	* @brief Returns the client graphics handler.
+	* @return Client graphics handle.
+	*/
+	inline CGraphics* getGraphics() { return m_pGraphics; }
+
+	/**
 	* @brief Returns the main client config.
 	* @return Client config.
 	*/
-	inline CConfig* CClient::getClientConfig() { return m_pClientConfig;  }
-	
+	inline CConfig* getClientConfig() { return m_pClientConfig;  }
 
 	/**
 	* @brief Returns the user input handler class
 	* @returns User input handler.
 	*/
-	inline CUserInput* CClient::getInputHandler() { return m_pUserInput;  }
+	inline CUserInput* getInputHandler() { return m_pUserInput;  }
 };
