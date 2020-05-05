@@ -14,8 +14,8 @@
 #define OPENGL_BLUE_BITS 5
 #define OPENGL_DEPTH_BITS 16
 
-#define OPENGL_VERSION_MAJOR 4
-#define OPENGL_VERSION_MINOR 1
+#define DEFAULT_RESOLUTION_X 1024
+#define DEFAULT_RESOLUTION_Y 728
 
 #include <SDL.h>
 #include <gl\glew.h>
@@ -40,8 +40,13 @@ enum GLSupportLevel : char
 	/** Standard support, the computer supports OpenGL 4.1+ */
 	GL_SUPPORT_STD = 2,
 	/** Maximum support, the computer supports OpenGL 4.6+ */
-	GL_SUPPORT_MAX = 3
+	GL_SUPPORT_MAX = 3,
+	/** Number of support levels */
+	GL_SUPPORT_COUNT
 };
+
+/** Defines which version each support level represents, index corresponds to GLSupportLevel value. */
+static const int GLSupportVersion[][2] ={ {0,0}, {3,2}, {4,1}, {4,6} };
 
 struct RenderJob
 {
@@ -76,7 +81,19 @@ private:
 	CShaderManager *m_pShaderManager;
 
 	std::vector<RenderJob> m_renderJobs;
+
+	bool m_viewportOutOfDate;
+
+	void setupViewport();
 public:
+#ifdef _DEBUG
+	/**
+	* @brief See debugCallback
+	* @details Reroutes to the debugCallback of the CGraphics class pointer stored in userParam
+	*/
+	static void MasterDebugCallback( GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam );
+#endif
+
 	/**
 	* @brief Constructor. Initializes all variables to NULL or 0.
 	* @author Timothy Volpe
@@ -111,6 +128,15 @@ public:
 	* rendering classes that it is time to draw.
 	*/
 	bool draw();
+
+	
+#ifdef _DEBUG
+	/**
+	* @brief The debug callback for openGL 4.3+ in debug mode
+	* @details See glDebugMessageCallback
+	*/
+	void debugCallback( GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message );
+#endif
 
 	/**
 	* @brief Submits a vertex array for rendering when the frame is drawn.
@@ -159,7 +185,7 @@ private:
 
 	GLenum m_bufferTarget;
 	GLsizeiptr m_bufferSize;
-	std::shared_ptr<void> m_bufferData;
+	void* m_bufferData;
 	GLbitfield m_bufferFlags;
 	GLenum m_bufferUsage;
 public:
@@ -173,7 +199,7 @@ public:
 	*	See glBufferData and glBufferStorage for information on the parameters.
 	* @warning This means data will not be used until the buffer is bound.
 	*/
-	void create( GLsizeiptr size, std::shared_ptr<void> data, GLbitfield flags, GLenum usage );
+	void create( GLsizeiptr size, void* data, GLbitfield flags, GLenum usage );
 	/**
 	* @brief Destroys the opengl buffer and frees its resources
 	*/

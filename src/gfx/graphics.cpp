@@ -17,6 +17,14 @@ bool RenderJobSort( RenderJob& a, RenderJob& b ) {
 // CGraphics //
 ///////////////
 
+#ifdef _DEBUG
+void CGraphics::MasterDebugCallback( GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam )
+{
+	CGraphics *pGraphics = const_cast<CGraphics*>(reinterpret_cast<const CGraphics*>(userParam));
+	pGraphics->debugCallback( source, type, id, severity, length, message );
+}
+#endif
+
 CGraphics::CGraphics( CGame *pGameHandle )
 {
 	m_pGameHandle = pGameHandle;
@@ -25,6 +33,8 @@ CGraphics::CGraphics( CGame *pGameHandle )
 	m_sdlContext = 0;
 
 	m_pShaderManager = 0;
+
+	m_viewportOutOfDate = true;
 }
 CGraphics::~CGraphics() {
 }
@@ -74,18 +84,38 @@ bool CGraphics::initialize()
 	SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, OPENGL_DEPTH_BITS );
 	SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
 
-	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, OPENGL_VERSION_MAJOR );
-	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, OPENGL_VERSION_MINOR );
+	// Iteratively try to create each GL context
+	SDL_GLContext testContext = 0;
+	for( char i = 1; i < GLSupportLevel::GL_SUPPORT_COUNT; i++ )
+	{
+		int attemptedMajor, attemptMinor;
+		attemptedMajor = GLSupportVersion[i][0];
+		attemptMinor = GLSupportVersion[i][1];
 
-	m_pGameHandle->getLogger()->print( "Attempting to create OpenGL %d.%d context...", OPENGL_VERSION_MAJOR, OPENGL_VERSION_MINOR );
+		// Delete previous
+		if( testContext ) {
+			SDL_GL_DeleteContext( testContext );
+			testContext = 0;
+		}
 
-	// Create the SDL context
-	m_sdlContext = SDL_GL_CreateContext( m_pSDLWindow );
-	if( !m_sdlContext ) {
-		m_pGameHandle->getLogger()->printError( "Failed to create OpenGL context: %s", SDL_GetError() );
-		return false;
+		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, attemptedMajor );
+		SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, attemptMinor );
+
+		m_pGameHandle->getLogger()->print( "Attempting to create OpenGL %d.%d context...", attemptedMajor, attemptMinor );
+
+		testContext = SDL_GL_CreateContext( m_pSDLWindow );
+		if( !testContext ) {
+			m_pGameHandle->getLogger()->printError( "Failed to create OpenGL context: %s", SDL_GetError() );
+			break;
+		}
+		int versionMajor, versionMinor;
+		SDL_GL_GetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, &versionMajor );
+		SDL_GL_GetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, &versionMinor );
+		m_pGameHandle->getLogger()->print( "Sucessfully created OpenGL %d.%d context!", versionMajor, versionMinor );
+
+		m_sdlContext = testContext;
 	}
-	m_pGameHandle->getLogger()->print( "Sucessfully created OpenGL context!" );
+	SDL_GL_MakeCurrent( m_pSDLWindow, m_sdlContext );
 
 	// Initialize GLEW
 	m_pGameHandle->getLogger()->print( "Initializing GLEW..." );
@@ -111,12 +141,35 @@ bool CGraphics::initialize()
 		return false;
 	}
 
+	// Set up debug output if supported
+#ifdef _DEBUG
+	if( glewIsSupported( "GL_ARB_debug_output" ) ) {
+		glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
+		glEnable( GL_DEBUG_OUTPUT );
+		glDebugMessageCallback( CGraphics::MasterDebugCallback, this );
+		GLuint unusedIds = 0;
+		glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, &unusedIds, GL_TRUE );
+	}
+#endif
+
 	// Print GL info
 	m_pGameHandle->getLogger()->print( "OpenGL Context Info:" );
 	m_pGameHandle->getLogger()->print( "\tVersion: %s", glGetString( GL_VERSION ) );
 	m_pGameHandle->getLogger()->print( "\tVendor: %s", glGetString( GL_VENDOR ) );
 	m_pGameHandle->getLogger()->print( "\tRenderer: %s", glGetString( GL_RENDERER ) );
 	m_pGameHandle->getLogger()->print( "\tGLSL: %s", glGetString( GL_SHADING_LANGUAGE_VERSION ) );
+
+	// GL Setup
+	glEnable( GL_DEPTH_TEST );
+	glDepthFunc( GL_LESS );
+
+	glEnable( GL_CULL_FACE );
+	glCullFace( GL_FRONT );
+	glFrontFace( GL_CCW );
+
+	glPointSize( 2.0f );
+
+	glClearColor( 0, 0, 0.0f, 1.0f );
 
 	// Check for error, however if we have gotten this far it is probably fine
 	if( (glError = glGetError()) != GL_NO_ERROR )
@@ -135,12 +188,12 @@ bool CGraphics::initialize()
 
 bool CGraphics::draw()
 {
-	// Clear screen
-	glClearColor( 0, 0, 0, 1 );
-	glClear( GL_COLOR_BUFFER_BIT );
+	// Update viewport if needed
+	if( m_viewportOutOfDate )
+		this->setupViewport();
 
-	// Swap buffers
-	SDL_GL_SwapWindow( m_pSDLWindow );
+	// Clear screen
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 	// Sort submitted vertex arrays by shader id
 	std::sort( m_renderJobs.begin(), m_renderJobs.end(), RenderJobSort );
@@ -157,6 +210,9 @@ bool CGraphics::draw()
 	size_t pastSize = m_renderJobs.size();
 	m_renderJobs.clear();
 	m_renderJobs.reserve( pastSize );
+
+	// Swap buffers
+	SDL_GL_SwapWindow( m_pSDLWindow );
 
 	return true;
 }
@@ -184,6 +240,66 @@ void CGraphics::destroy()
 	m_pGameHandle = 0;
 }
 
+void CGraphics::setupViewport()
+{
+	int resolutionX, resolutionY;
+
+	m_viewportOutOfDate = false;
+
+	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<int>( CONFIG_STR_RESOLUTION_X, &resolutionX ) ) {
+		resolutionX = DEFAULT_RESOLUTION_X;
+		m_pGameHandle->getLogger()->printWarn( "Failed to get resolution from config, using default" );
+	}
+	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<int>( CONFIG_STR_RESOLUTION_Y, &resolutionY ) ) {
+		resolutionY = DEFAULT_RESOLUTION_Y;
+		m_pGameHandle->getLogger()->printWarn( "Failed to get resolution from config, using default" );
+	}
+
+	glViewport( 0, 0, resolutionX, resolutionY );
+}
+
+#ifdef _DEBUG
+void CGraphics::debugCallback( GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message )
+{
+	// Determine severity
+	std::string severityStr;
+	switch( severity )
+	{
+	case GL_DEBUG_SEVERITY_LOW:
+		severityStr = "LOW";
+		break;
+	case GL_DEBUG_SEVERITY_MEDIUM:
+		severityStr = "MEDIUM";
+		break;
+	case GL_DEBUG_SEVERITY_HIGH:
+		severityStr = "HIGH";
+		break;
+	default:
+		severityStr = "UNKNOWN";
+		break;
+	}
+	// Determine message type
+	switch( type )
+	{
+	case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+		m_pGameHandle->getLogger()->printError( "OPENGL UNDEFINED (id: %u, s: %s): %s", id, severityStr.c_str(), message );
+		break;
+	case GL_DEBUG_TYPE_ERROR:
+		m_pGameHandle->getLogger()->printError( "OPENGL ERROR (id: %u, s: %s): %s", id, severityStr.c_str(), message );
+		break;
+	case GL_DEBUG_TYPE_PORTABILITY:
+	case GL_DEBUG_TYPE_PERFORMANCE:
+	case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+		m_pGameHandle->getLogger()->printWarn( "OPENGL WARNING (id: %u, s: %s): %s", id, severityStr.c_str(), message );
+		break;
+	case GL_DEBUG_TYPE_OTHER:
+		m_pGameHandle->getLogger()->print( "OPENGL (id: %u, s: %s): %s", id, severityStr.c_str(), message );
+		break;
+	}
+	
+}
+#endif
+
 void CGraphics::submitForDraw( std::shared_ptr<CVertexArray> vertexArray, unsigned int shaderIndex, unsigned int vertexCount )
 {
 	assert( vertexArray );
@@ -202,6 +318,7 @@ CBufferObject::CBufferObject()
 	m_bufferId = 0;
 
 	m_bufferSize = 0;
+	m_bufferData = 0;
 	m_bufferFlags = 0;
 	m_bufferUsage = 0;
 }
@@ -210,7 +327,7 @@ CBufferObject::~CBufferObject()
 	this->destroy();
 }
 
-void CBufferObject::create( GLsizeiptr size, std::shared_ptr<void> data, GLbitfield flags, GLenum usage )
+void CBufferObject::create( GLsizeiptr size, void* data, GLbitfield flags, GLenum usage )
 {
 	assert( !m_bufferId && !m_bufferData );
 
@@ -236,10 +353,11 @@ bool CBufferObject::bind( GLenum target )
 	{
 		glGenBuffers( 1, &m_bufferId );
 		glBindBuffer( target, m_bufferId );
-		if( glewIsSupported( "GL_ARB_buffer_storage" ) )
-			glBufferStorage( target, m_bufferSize, m_bufferData.get(), m_bufferFlags );
-		else
-			glBufferData( target, m_bufferSize, m_bufferData.get(), m_bufferUsage );
+		if( glewIsSupported( "GL_ARB_buffer_storage" ) ) {
+			glBufferStorage( target, m_bufferSize, m_bufferData, m_bufferFlags );
+		}
+		else 
+			glBufferData( target, m_bufferSize, m_bufferData, m_bufferUsage );
 		if( (glError = glGetError()) != GL_NO_ERROR ) {
 			m_bufferId = 0;
 			return false;
@@ -317,6 +435,8 @@ GLuint CVertexArray::addVertexAttribInternal( unsigned char internalType, GLint 
 	// Populate attrib struct
 	attrib = { index, size, type, stride, pointer, normalized, internalType };
 
+	m_vertexAttribQueue.push( attrib );
+
 	return index;
 }
 GLuint CVertexArray::addVertexAttrib( GLint size, GLenum type, GLsizei stride, const void *pointer, GLboolean normalized ) {
@@ -376,7 +496,7 @@ bool CVertexArray::flushBindsAndAttribs()
 			return false;
 		}
 		// Enable vertex attrib
-		glEnableVertexArrayAttrib( m_vaoId, attrib.index );
+		glEnableVertexAttribArray( attrib.index );
 		if( (glError = glGetError()) != GL_NO_ERROR ) {
 			m_pGameHandle->getLogger()->printError( "Failed to call glEnableVertexArrayAttrib, GL error code %u", glError );
 			return false;

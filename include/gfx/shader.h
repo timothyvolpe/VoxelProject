@@ -5,10 +5,14 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <functional>
 
 #define SHADER_DEF_FILE "shaders.json"
 #define SHADER_COMPILE_LOG "compile.log"
 #define SHADER_LINK_LOG "link.log"
+
+/** If this is defined, missing uniforms will be a fatal error */
+//#define STRICT_UNIFORMS
 
 class CGame;
 class CShaderStage;
@@ -103,6 +107,9 @@ private:
 
 	std::vector<GLint> m_uniformLocations;
 	std::map<std::string, size_t> m_uniformNameToIndex;
+
+	bool m_updateUniforms;
+	std::vector<std::function<void()>> m_updateCallbacks;
 public:
 	CShaderProgram( CGame* pGameHandle, std::string programName );
 	~CShaderProgram();
@@ -127,6 +134,18 @@ public:
 	bool link( std::vector<std::string> uniformNames );
 
 	/**
+	* @brief Bind the shader object. Should only be called by shader manager.
+	* @warning Should only be called by shader manager.
+	*/
+	void bind();
+
+	/**
+	* @brief Add to the list of functions to call when uniforms are updated.
+	* @param[in]	callback	Should be a pointer to the callback function.
+	*/
+	void subscribeToUniformUpdate( std::function<void()> callback );
+
+	/**
 	* @brief Get uniform location from name.
 	* @details Slow lookup to get the uniform index from the uniform name in the lookup table.
 	*	Call this when initializing, then use the index to retrieve the uniform location.
@@ -146,6 +165,13 @@ public:
 
 	inline std::string getProgramName() { return m_programName;  }
 	GLuint getProgramId() { return m_shaderProgramId; }
+
+	/**
+	* @brief Hint to the shader that the uniforms need to be updated.
+	* @details This will tell the shader to call the subscribing uniform update functions
+	*	after the next bind call.
+	*/
+	inline void requireUniformUpdate() { m_updateUniforms = true; }
 };
 
 /**

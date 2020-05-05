@@ -120,7 +120,7 @@ private:
 
 		// console print
 		std::lock_guard<std::mutex> lock( m_logMutex );
-		std::cout << boost::str( formatter ) << "\n";
+		std::cout << boost::str( formatter ) << std::endl;
 		// log file print
 		logStr = logPrefix + boost::str( formatter );
 		m_logEntryQueue.push( logStr );

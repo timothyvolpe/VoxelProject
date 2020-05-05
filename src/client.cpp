@@ -83,8 +83,8 @@ bool CClient::loadConfig()
 	boost::property_tree::ptree clientConfig;
 
 	// Create default client config info
-	clientConfig.put<int>( "ResolutionX", 1024 );
-	clientConfig.put<int>( "ResolutionY", 728 );
+	clientConfig.put<int>( CONFIG_STR_RESOLUTION_X, DEFAULT_RESOLUTION_X );
+	clientConfig.put<int>( CONFIG_STR_RESOLUTION_Y, DEFAULT_RESOLUTION_Y );
 
 	if( !m_pClientConfig->loadConfig( "client.cfg", clientConfig ) )
 		return false;

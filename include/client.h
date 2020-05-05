@@ -10,6 +10,9 @@
 #pragma once
 #include "componentdef.h"
 
+#define CONFIG_STR_RESOLUTION_X "ResolutionX"
+#define CONFIG_STR_RESOLUTION_Y "ResolutionY"
+
 class CGame;
 class CGraphics;
 class CConfig;

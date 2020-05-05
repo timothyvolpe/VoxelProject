@@ -244,7 +244,7 @@ bool CShaderManager::getProgramIndex( std::string programName, unsigned int *pIn
 void CShaderManager::bindProgram( unsigned int programIndex )
 {
 	if( m_boundProgramIndex != programIndex ) {
-		glUseProgram( m_shaderPrograms[programIndex-1]->getProgramId() );
+		m_shaderPrograms[programIndex-1]->bind();
 		m_boundProgramIndex = programIndex;
 	}
 }
@@ -262,6 +262,7 @@ CShaderProgram::CShaderProgram( CGame* pGameHandle, std::string programName ) : 
 {
 	m_programName = programName;
 	m_shaderProgramId = 0;
+	m_updateUniforms = false;
 }
 CShaderProgram::~CShaderProgram() {
 	this->deleteProgram();
@@ -336,10 +337,12 @@ bool CShaderProgram::link( std::vector<std::string> uniformNames )
 	for( auto it = uniformNames.begin(); it != uniformNames.end(); it++ )
 	{
 		uniformLoc = glGetUniformLocation( m_shaderProgramId, (*it).c_str() );
+#ifdef STRICT_UNIFORMS
 		if( uniformLoc == -1 ) {
 			m_pGameHandle->getLogger()->print( "Failed to find uniform %s in shader program %s", (*it).c_str(), m_programName.c_str() );
 			return false;
 		}
+#endif
 		if( (glError = glGetError()) != GL_NO_ERROR ) {
 			m_pGameHandle->getLogger()->print( "Failed to find uniform %s in shader program %s, GL error code %u", (*it).c_str(), m_programName.c_str(), glError );
 			return false;
@@ -349,6 +352,23 @@ bool CShaderProgram::link( std::vector<std::string> uniformNames )
 	}
 
 	return true;
+}
+
+void CShaderProgram::bind()
+{
+	assert( m_shaderProgramId );
+
+	glUseProgram( m_shaderProgramId );
+	// Call uniform update functions if necessary
+	if( m_updateUniforms )
+	{
+		m_updateUniforms = false;
+		for( auto it: m_updateCallbacks )
+			it();
+	}
+}
+void CShaderProgram::subscribeToUniformUpdate( std::function<void()> callback ) {
+	m_updateCallbacks.push_back( callback );
 }
 
 bool CShaderProgram::getUniformIndex( std::string name, size_t* pIndex )
