@@ -385,7 +385,7 @@ public:
 	* @details If the system has already been registered, the registration will fail. A pointer to the system
 	*	is returned by the function if successfully registered the system. The signature defines which entities the system will pay attention to.
 	* @param[in]	signature	The signature of entities for the system to update.
-	* @returns Returns a pointer to the system if the registration was successful. If it failed, it will return a null pointer.
+	* @returns Returns a pointer to the system if the registration was successful. If it failed, it will return a null pointer. It will also fail if the system failed to initialize.
 	*/
 	template<typename T>
 	std::shared_ptr<T> RegisterSystem( ComponentSignature signature )
@@ -399,7 +399,8 @@ public:
 			return 0;
 
 		std::shared_ptr<T> system = std::make_shared<T>( m_pGameHandle, m_pCoordinatorHandle );
-		system->initialize();
+		if( !system->initialize() )
+			return 0;
 		m_systemArray.insert( std::pair<const char*, std::shared_ptr<CSystemBase>>( typeName, system ) );
 		m_systemSignatures.insert( std::pair<const char*, ComponentSignature>( typeName, signature ) );
 

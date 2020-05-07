@@ -83,8 +83,11 @@ bool CClient::loadConfig()
 	boost::property_tree::ptree clientConfig;
 
 	// Create default client config info
-	clientConfig.put<int>( CONFIG_STR_RESOLUTION_X, DEFAULT_RESOLUTION_X );
-	clientConfig.put<int>( CONFIG_STR_RESOLUTION_Y, DEFAULT_RESOLUTION_Y );
+	clientConfig.put<unsigned int>( CONFIG_STR_RESOLUTION_X, DEFAULT_RESOLUTION_X );
+	clientConfig.put<unsigned int>( CONFIG_STR_RESOLUTION_Y, DEFAULT_RESOLUTION_Y );
+	clientConfig.put<unsigned int>( CONFIG_STR_REFRESH_RATE, DEFAULT_REFRESH_RATE );
+	clientConfig.put<float>( CONFIG_STR_FOV, DEFAULT_FOV );
+	clientConfig.put<int>( CONFIG_STR_WINDOW_MODE, DEFAULT_WINDOW_MODE );
 
 	if( !m_pClientConfig->loadConfig( "client.cfg", clientConfig ) )
 		return false;

@@ -23,7 +23,7 @@ private:
 	unsigned int m_simpleShaderIndex;
 	std::vector<Vertex3D> m_vertices;
 
-	unsigned int m_mvpUniformLocation;
+	unsigned int m_modelMatUniformLoc;
 	glm::mat4 m_projectionMatrix, m_viewMatrix, m_modelMatrix;
 public:
 	CRenderSystem( CGame *pGameHandle, CECSCoordinator *pCoordinator );

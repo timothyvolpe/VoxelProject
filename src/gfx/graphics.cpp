@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <glm/ext.hpp>
 #include "gfx\graphics.h"
 #include "gfx\shader.h"
 #include "game.h"
@@ -34,6 +35,10 @@ CGraphics::CGraphics( CGame *pGameHandle )
 
 	m_pShaderManager = 0;
 
+	m_projectionPerspMat = glm::mat4( 1.0f );
+	m_projectionOrthoMat = glm::mat4( 1.0f );
+	m_viewMat = std::make_shared<glm::mat4>( 1.0f );
+
 	m_viewportOutOfDate = true;
 }
 CGraphics::~CGraphics() {
@@ -60,8 +65,8 @@ bool CGraphics::initialize()
 		m_pGameHandle->getLogger()->printWarn( "SDL2 already initialized" );
 
 	// Get resolution
-	m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<unsigned int>( "ResolutionX", &resX );
-	m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<unsigned int>( "ResolutionY", &resY );
+	m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<unsigned int>( CONFIG_STR_RESOLUTION_X, &resX );
+	m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<unsigned int>( CONFIG_STR_RESOLUTION_Y, &resY );
 
 	// Create SDL window
 	m_pSDLWindow = SDL_CreateWindow(
@@ -169,7 +174,7 @@ bool CGraphics::initialize()
 
 	glPointSize( 2.0f );
 
-	glClearColor( 0, 0, 0.0f, 1.0f );
+	glClearColor( 0, 0, 0.25f, 1.0f );
 
 	// Check for error, however if we have gotten this far it is probably fine
 	if( (glError = glGetError()) != GL_NO_ERROR )
@@ -189,8 +194,21 @@ bool CGraphics::initialize()
 bool CGraphics::draw()
 {
 	// Update viewport if needed
-	if( m_viewportOutOfDate )
-		this->setupViewport();
+	if( m_viewportOutOfDate ) {
+		if( !this->setupViewport() )
+			return false;
+	}
+
+	// Update matrix block
+	glm::mat4 matrixBlock[3];
+	UniformBlockData uboData = m_pShaderManager->getUniformBlock( UniformBlockIDs::UNIFORM_BLOCK_MATRIX );
+
+	matrixBlock[0] = m_projectionPerspMat;
+	matrixBlock[1] = m_projectionOrthoMat;
+	matrixBlock[2] = (*m_viewMat);
+	glBindBuffer( GL_UNIFORM_BUFFER, uboData.uboId );
+	glBufferSubData( GL_UNIFORM_BUFFER, 0, sizeof( matrixBlock ), &matrixBlock[0] );
+	glBindBuffer( GL_UNIFORM_BUFFER, 0 );
 
 	// Clear screen
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
@@ -240,22 +258,130 @@ void CGraphics::destroy()
 	m_pGameHandle = 0;
 }
 
-void CGraphics::setupViewport()
+bool CGraphics::setupViewport()
 {
-	int resolutionX, resolutionY;
+	assert( m_pSDLWindow );
+
+	unsigned int resolutionX, resolutionY;
+	unsigned int refreshRate;
+	float fov;
+	WindowModes windowMode;
+	SDL_DisplayMode displayMode;
 
 	m_viewportOutOfDate = false;
 
-	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<int>( CONFIG_STR_RESOLUTION_X, &resolutionX ) ) {
+	// Check the window mode
+	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<int>( CONFIG_STR_WINDOW_MODE, reinterpret_cast<int*>(&windowMode) ) ) {
+		windowMode = DEFAULT_WINDOW_MODE;
+		m_pGameHandle->getLogger()->printWarn( "Failed to get window mode from config, using default" );
+	}
+	if( windowMode != WindowModes::WindowModeBordered
+		&& windowMode != WindowModes::WindowModeBorderless
+		&& windowMode != WindowModes::WindowModeFullscreen )
+		windowMode = WindowModes::WindowModeBordered;
+	// Handle switching between window modes
+	switch( windowMode )
+	{
+	case WindowModes::WindowModeBordered:
+		if( SDL_SetWindowFullscreen( m_pSDLWindow, 0 ) < 0 ) {
+			m_pGameHandle->getLogger()->printError( "Failed to exit fullscreen: %s", SDL_GetError() );
+			return false;
+		}
+		SDL_SetWindowBordered( m_pSDLWindow, SDL_TRUE );
+		break;
+	case WindowModes::WindowModeBorderless:
+		if( SDL_SetWindowFullscreen( m_pSDLWindow, 0 ) < 0 ) {
+			m_pGameHandle->getLogger()->printError( "Failed to exit fullscreen: %s", SDL_GetError() );
+			return false;
+		}
+		SDL_SetWindowBordered( m_pSDLWindow, SDL_FALSE );
+		break;
+	case WindowModes::WindowModeFullscreen:
+		if( SDL_SetWindowFullscreen( m_pSDLWindow, SDL_WINDOW_FULLSCREEN ) < 0 ) {
+			m_pGameHandle->getLogger()->printError( "Failed to enter fullscreen: %s", SDL_GetError() );
+			return false;
+		}
+		break;
+	default:
+		assert( false );
+		break;
+	}
+
+	// Get user config resolutions
+	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<unsigned int>( CONFIG_STR_RESOLUTION_X, &resolutionX ) ) {
 		resolutionX = DEFAULT_RESOLUTION_X;
 		m_pGameHandle->getLogger()->printWarn( "Failed to get resolution from config, using default" );
 	}
-	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<int>( CONFIG_STR_RESOLUTION_Y, &resolutionY ) ) {
+	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<unsigned int>( CONFIG_STR_RESOLUTION_Y, &resolutionY ) ) {
 		resolutionY = DEFAULT_RESOLUTION_Y;
 		m_pGameHandle->getLogger()->printWarn( "Failed to get resolution from config, using default" );
 	}
+	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<unsigned int>( CONFIG_STR_REFRESH_RATE, &refreshRate ) ) {
+		resolutionY = DEFAULT_REFRESH_RATE;
+		m_pGameHandle->getLogger()->printWarn( "Failed to get refresh rate from config, using default" );
+	}
 
-	glViewport( 0, 0, resolutionX, resolutionY );
+	// If fullscreen mode, try to find a video mode matching the user config
+	if( WindowModes::WindowModeFullscreen )
+	{
+		// Get which window the display is in
+		int displayIndex = SDL_GetWindowDisplayIndex( m_pSDLWindow );
+		if( displayIndex < 0 ) {
+			m_pGameHandle->getLogger()->printError( "Failed to get display index: %s", SDL_GetError() );
+			return false;
+		}
+		// Query display modes for current display
+		int numDisplayModes = SDL_GetNumDisplayModes( displayIndex );
+		if( numDisplayModes < 0 ) {
+			m_pGameHandle->getLogger()->printError( "Failed to get display modes: %s", SDL_GetError() );
+			return false;
+		}
+		else if( numDisplayModes == 0 ) {
+			m_pGameHandle->getLogger()->printError( "Did not find any fullscreen display modes!" );
+			return false;
+		}
+		// Find a display mode that matches user config settings or use the last one we found
+		for( int i = 0; i < numDisplayModes; i++ )
+		{
+			if( SDL_GetDisplayMode( displayIndex, i, &displayMode ) < 0 )
+				m_pGameHandle->getLogger()->printWarn( "Failed to query a display mode: %s", SDL_GetError() );
+			else {
+				// Check if we found a match
+				if( displayMode.w == resolutionX && displayMode.h == resolutionY && displayMode.refresh_rate == 60 )
+					break;
+			}
+			if( i == numDisplayModes-1 )
+				m_pGameHandle->getLogger()->printWarn( "Could not find a display mode matching %dx%d px @ %d Hz", resolutionX, resolutionY, refreshRate );
+		}
+		// Update display mode
+		resolutionX = displayMode.w;
+		resolutionY = displayMode.h;
+		refreshRate = displayMode.refresh_rate;
+		m_pGameHandle->getLogger()->print( "Setting fullscreen to %dx%d px @ %d Hz", resolutionX, resolutionY, refreshRate );
+		if( SDL_SetWindowDisplayMode( m_pSDLWindow, &displayMode ) < 0 ) {
+			m_pGameHandle->getLogger()->printError( "Failed to set display mode: %s", SDL_GetError() );
+			return false;
+		}
+		// Update config to reflect valid display mode
+		m_pGameHandle->getClient()->getClientConfig()->updateProperty<unsigned int>( CONFIG_STR_RESOLUTION_X, resolutionX );
+		m_pGameHandle->getClient()->getClientConfig()->updateProperty<unsigned int>( CONFIG_STR_RESOLUTION_Y, resolutionY );
+		m_pGameHandle->getClient()->getClientConfig()->updateProperty<unsigned int>( CONFIG_STR_REFRESH_RATE, refreshRate );
+	}
+	// If window mode, set resolution
+	else
+		SDL_SetWindowSize( m_pSDLWindow, resolutionX, resolutionY );
+
+	if( !m_pGameHandle->getClient()->getClientConfig()->getPropertyFromConfig<float>( CONFIG_STR_FOV, &fov ) ) {
+		fov = DEFAULT_FOV;
+		m_pGameHandle->getLogger()->printWarn( "Failed to get FOV from config, using default" );
+	}
+	fov = glm::clamp( fov, FOV_MIN, FOV_MAX );
+
+	m_projectionPerspMat = glm::perspective( fov, (float)(resolutionX / resolutionY), 0.1f, 100.0f );
+
+	//glViewport( 0, 0, resolutionX, resolutionY );
+
+	return true;
 }
 
 #ifdef _DEBUG
@@ -353,9 +479,8 @@ bool CBufferObject::bind( GLenum target )
 	{
 		glGenBuffers( 1, &m_bufferId );
 		glBindBuffer( target, m_bufferId );
-		if( glewIsSupported( "GL_ARB_buffer_storage" ) ) {
+		if( glewIsSupported( "GL_ARB_buffer_storage" ) )
 			glBufferStorage( target, m_bufferSize, m_bufferData, m_bufferFlags );
-		}
 		else 
 			glBufferData( target, m_bufferSize, m_bufferData, m_bufferUsage );
 		if( (glError = glGetError()) != GL_NO_ERROR ) {

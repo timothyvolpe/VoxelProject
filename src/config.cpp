@@ -35,7 +35,7 @@ bool CConfig::loadConfig( std::string configName, boost::property_tree::ptree& d
 		// verify property tree 
 		for( auto iter = defaultProperties.begin(); iter != defaultProperties.end(); iter++ )
 		{
-			auto checkprop = configTree.get_child_optional( "possibly_missing_node" );
+			auto checkprop = configTree.get_child_optional( (*iter).first );
 			if( !checkprop )
 				configTree.put_child( (*iter).first, (*iter).second );
 		}

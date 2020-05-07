@@ -10,8 +10,11 @@
 #pragma once
 #include "componentdef.h"
 
-#define CONFIG_STR_RESOLUTION_X "ResolutionX"
-#define CONFIG_STR_RESOLUTION_Y "ResolutionY"
+#define CONFIG_STR_RESOLUTION_X "WindowResolutionX"
+#define CONFIG_STR_RESOLUTION_Y "WindowResolutionY"
+#define CONFIG_STR_REFRESH_RATE "WindowRefreshRate"
+#define CONFIG_STR_FOV "FOV"
+#define CONFIG_STR_WINDOW_MODE "WindowMode"
 
 class CGame;
 class CGraphics;

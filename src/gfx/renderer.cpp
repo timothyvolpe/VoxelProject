@@ -25,6 +25,10 @@ bool CWorldRenderer::initialize()
 	ComponentSignature renderSig;
 	renderSig.set( m_pClientEntCoordinator->getComponentManager()->GetComponentTypeId<Position3D>() );
 	m_renderSystem = m_pClientEntCoordinator->getSystemManager()->RegisterSystem<CRenderSystem>( renderSig );
+	if( !m_renderSystem ) {
+		m_pGameHandle->getLogger()->printError( "Failed to register render system." );
+		return false;
+	}
 
 	return true;
 }

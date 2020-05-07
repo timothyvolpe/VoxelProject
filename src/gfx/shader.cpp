@@ -3,6 +3,8 @@
 #include <gl/glew.h>
 #include <fstream>
 #include <chrono>
+#include "client.h"
+#include "gfx\graphics.h"
 #include "gfx\shader.h"
 #include "game.h"
 #include "filesystem.h"
@@ -15,6 +17,7 @@
 CShaderManager::CShaderManager( CGame *pGameHandle ) : m_pGameHandle( pGameHandle )
 {
 	m_boundProgramIndex = 0;
+	m_uboIndexCounter = 0;
 }
 CShaderManager::~CShaderManager()
 {
@@ -22,10 +25,69 @@ CShaderManager::~CShaderManager()
 
 bool CShaderManager::initialize()
 {
+	if( !this->createUniformBlocks() )
+		return false;
+
 	return true;
 }
 void CShaderManager::shutdown()
 {
+	this->destroyUniformBlocks();
+}
+
+bool CShaderManager::createUniformBlocks()
+{
+	std::vector<GLuint> uboIds;
+	GLenum glError;
+
+	// Generate buffers
+	uboIds.resize( UniformBlockIDs::UNIFORM_BLOCK_COUNT );
+
+	glGenBuffers( (GLsizei)uboIds.size(), &uboIds[0] );
+	if( (glError = glGetError()) != GL_NO_ERROR ) {
+		m_pGameHandle->getLogger()->printError( "Failed to generate uniform buffer objects, GL error code %u", glError );
+		return false;
+	}
+
+	// Assign buffers and data
+	for( unsigned int i = 0; i < UniformBlockIDs::UNIFORM_BLOCK_COUNT; i++ )
+	{
+		UniformBlockData uniformBlockData;
+		uniformBlockData = UniformBlocknames[i];
+		uniformBlockData.uboId = uboIds[i];
+
+		assert( uniformBlockData.blockSize > 0 );
+
+		// Bind and allocate space
+		glBindBuffer( GL_UNIFORM_BUFFER, uniformBlockData.uboId );
+		if( glewIsSupported( "GL_ARB_buffer_storage" ) )
+			glBufferStorage( GL_UNIFORM_BUFFER, uniformBlockData.blockSize, 0, GL_DYNAMIC_STORAGE_BIT );
+		else
+			glBufferData( GL_UNIFORM_BUFFER, uniformBlockData.blockSize, 0, GL_DYNAMIC_DRAW );
+		glBindBuffer( GL_UNIFORM_BUFFER, 0 );
+
+		// Bind the entire buffer to a range of memory
+		glBindBufferRange( GL_UNIFORM_BUFFER, m_uboIndexCounter, uniformBlockData.uboId, 0, uniformBlockData.blockSize );
+		uniformBlockData.uboBindingPoint = m_uboIndexCounter++;
+
+		if( (glError = glGetError()) != GL_NO_ERROR ) {
+			m_pGameHandle->getLogger()->printError( "Failed to allocate uniform buffer object memory, GL error code %u", glError );
+			return false;
+		}
+
+		m_uniformBlocks.push_back( uniformBlockData );
+	}
+	
+	return true;
+}
+void CShaderManager::destroyUniformBlocks()
+{
+	for( auto it: m_uniformBlocks ) {
+		if( it.uboId )
+			glDeleteBuffers( 1, &it.uboId );
+	}
+	m_uniformBlocks.clear();
+	m_uboIndexCounter = 0;
 }
 
 bool CShaderManager::loadPrograms()
@@ -254,6 +316,13 @@ std::shared_ptr<CShaderProgram> CShaderManager::getProgramByIndex( unsigned int 
 	return m_shaderPrograms[programIndex-1];
 }
 
+UniformBlockData& CShaderManager::getUniformBlock( UniformBlockIDs blockIdentifier )
+{
+	assert( blockIdentifier < UniformBlockIDs::UNIFORM_BLOCK_COUNT );
+
+	return m_uniformBlocks[blockIdentifier];
+}
+
 ////////////////////
 // CShaderProgram //
 ////////////////////
@@ -349,6 +418,21 @@ bool CShaderProgram::link( std::vector<std::string> uniformNames )
 		}
 		m_uniformNameToIndex.insert( std::pair<std::string, size_t>( (*it), m_uniformLocations.size() ) );
 		m_uniformLocations.push_back( uniformLoc );
+	}
+
+	// Check for global uniform blocks in this shader
+	std::vector<UniformBlockData> uniformBlocks = m_pGameHandle->getClient()->getGraphics()->getShaderManager()->getUniformBlockData();
+	for( auto it: uniformBlocks )
+	{
+		GLuint uboLocalIndex = glGetUniformBlockIndex( m_shaderProgramId, it.blockName );
+		if( uboLocalIndex == GL_INVALID_INDEX )
+			continue;
+		// Bind it to the global slot
+		glUniformBlockBinding( m_shaderProgramId, uboLocalIndex, it.uboBindingPoint );
+		if( (glError = glGetError()) != GL_NO_ERROR ) {
+			m_pGameHandle->getLogger()->print( "Failed to bind global UBO %s in shader program %s, GL error code %u", it.blockName, m_programName.c_str(), glError );
+			return false;
+		}
 	}
 
 	return true;
@@ -466,19 +550,50 @@ bool CShaderStage::createFromFile( std::string relPath )
 	boost::algorithm::to_lower( extension );
 	// Find all files matching extension
 	absFilePath = "";
+	int requiredGLSL = m_pGameHandle->getClient()->getGraphics()->getGLSLVersion();
 	for( auto& entry : boost::make_iterator_range( boost::filesystem::directory_iterator( shaderDir ), {} ) )
 	{
 		if( !boost::filesystem::is_regular_file( entry ) )
 			continue;
 		// Check for extension match
-		if( boost::algorithm::to_lower_copy( entry.path().extension().string() ).compare( extension ) == 0 ) {
-			// use this file
-			absFilePath = entry.path();
-			break;
+		if( boost::algorithm::to_lower_copy( entry.path().extension().string() ).compare( extension ) == 0 )
+		{
+			// Check if it has a GLSL version, should be *_<version>.ext
+			std::string filename = entry.path().stem().string();
+			size_t versionStart = filename.find_last_of( '_' );
+			if( versionStart == std::string::npos || versionStart >= filename.length() ) {
+				m_pGameHandle->getLogger()->printError( "Found shader file without GLSL version, file format should be \'%s_<glsl-version>%s\'", filename.c_str(), extension.c_str() );
+				continue;
+			}
+			// Get the version integer
+			int glslVersion;
+			try {
+				glslVersion = std::stoi( filename.substr( versionStart+1 ) );
+			}
+			catch( const std::invalid_argument ) {
+				m_pGameHandle->getLogger()->printError( "Found shader file without valid GLSL version, file format should be \'%s_<glsl-version>%s\'", filename.c_str(), extension.c_str() );
+				continue;
+			}
+			catch( const std::out_of_range ) {
+				m_pGameHandle->getLogger()->printError( "GLSL version was out of range, don\'t do that.", filename.c_str(), extension.c_str() );
+				continue;
+			}
+
+			// If GLSL version is less, its a candidate
+			// If it is more, we cannot use it
+			// If it is exact, we can stop
+			if( glslVersion == requiredGLSL ) {
+				absFilePath = entry.path();
+				break;
+			}
+			else if( glslVersion < requiredGLSL ) {
+				absFilePath = entry.path();
+				continue;
+			}
 		}
 	}
 	if( absFilePath.empty() ) {
-		m_pGameHandle->getLogger()->printError( "Failed to compile shader stage: file was missing or invalid" );
+		m_pGameHandle->getLogger()->printError( "Failed to compile shader stage: file was missing or invalid, or not shader for the supported GLSL version was found (v%d).", requiredGLSL );
 		return false;
 	}
 

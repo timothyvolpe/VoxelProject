@@ -14,15 +14,22 @@
 #define OPENGL_BLUE_BITS 5
 #define OPENGL_DEPTH_BITS 16
 
-#define DEFAULT_RESOLUTION_X 1024
-#define DEFAULT_RESOLUTION_Y 728
+#define DEFAULT_RESOLUTION_X 1280
+#define DEFAULT_RESOLUTION_Y 720
+#define DEFAULT_REFRESH_RATE 60
+#define DEFAULT_FOV 60.0f
+
+#define FOV_MIN 30.0f
+#define FOV_MAX 120.0f
 
 #include <SDL.h>
 #include <gl\glew.h>
 #include <GL\GL.h>
+#include <glm/glm.hpp>
 #include <memory>
 #include <vector>
 #include <queue>
+#include <assert.h>
 
 class CGame;
 class CShaderManager;
@@ -35,7 +42,7 @@ enum GLSupportLevel : char
 {
 	/** No support, the game cannot run the client on this computer/ */
 	GL_SUPPORT_NONE = 0,
-	/** Minimum support, the computer supports OpenGL 3.2+ */
+	/** Minimum support, the computer supports OpenGL 3.3+ */
 	GL_SUPPORT_MIN = 1,
 	/** Standard support, the computer supports OpenGL 4.1+ */
 	GL_SUPPORT_STD = 2,
@@ -46,7 +53,9 @@ enum GLSupportLevel : char
 };
 
 /** Defines which version each support level represents, index corresponds to GLSupportLevel value. */
-static const int GLSupportVersion[][2] ={ {0,0}, {3,2}, {4,1}, {4,6} };
+static const int GLSupportVersion[][2] ={ {0,0}, {3,3}, {4,1}, {4,6} };
+/** The GLSL version defines which shaders to load */
+static const int GLSLVersion[] ={ 0, 330, 410, 460 };
 
 struct RenderJob
 {
@@ -56,6 +65,15 @@ struct RenderJob
 };
 typedef std::pair<GLuint, unsigned int> ArrayShaderPair;
 bool RenderJobSort( RenderJob& a, RenderJob& b );
+
+enum WindowModes
+{
+	WindowModeBordered = 0,
+	WindowModeBorderless = 1,
+	WindowModeFullscreen = 2
+};
+
+#define DEFAULT_WINDOW_MODE WindowModes::WindowModeBordered
 
 /**
 * @brief The graphics handler.
@@ -82,9 +100,18 @@ private:
 
 	std::vector<RenderJob> m_renderJobs;
 
+	glm::mat4 m_projectionPerspMat, m_projectionOrthoMat;
+	std::shared_ptr<glm::mat4> m_viewMat;
+
 	bool m_viewportOutOfDate;
 
-	void setupViewport();
+	/**
+	* @brief This sets up, or reconfigs, the viewport. This means the window and the rendering context.
+	* @details If we are in full screen, the user can set the resolution to any of the valid resolutions, and the aspect ratio will suffer if it does not match the monitor.
+	*	If we are in windowed mode, the user can set the resolution to any value and the window will change size to accomadate.
+	* @returns True if successfully set video mode, false if there was an issue with the video modes.
+	*/
+	bool setupViewport();
 public:
 #ifdef _DEBUG
 	/**
@@ -152,6 +179,16 @@ public:
 	* @returns The shader manager.
 	*/
 	inline CShaderManager* getShaderManager() { return m_pShaderManager; }
+
+	inline char getGLSupportLevel() { return m_glSupportLevel; }
+	inline int getGLSLVersion() { assert( m_glSupportLevel >= 0 && m_glSupportLevel < GLSupportLevel::GL_SUPPORT_COUNT ); return GLSLVersion[m_glSupportLevel]; }
+
+	/**
+	* @brief Get a shared pointer to the view matrix.
+	* @details Only sent to the shaders once at the beginning of the frame.
+	* @returns A shared pointer to the view matrix.
+	*/
+	inline std::shared_ptr<glm::mat4> getViewMatrixPtr() { return m_viewMat; }
 };
 
 enum OpenGLBufferTypes : uint16_t

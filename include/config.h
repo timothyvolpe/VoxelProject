@@ -85,4 +85,16 @@ public:
 		else
 			return false;
 	}
+
+	/**
+	* @brief Updates a property in the config and saves to file.
+	* @details If the given property exists, its value will be updated. If it does not, it will be created.
+	* @param[in]	propertyPath	The path to the property in the property tree
+	* @param[out]	propertyValue	The value of the property
+	*/
+	template<class T>
+	void updateProperty( std::string propertyPath, T propertyValue )
+	{
+		m_configProperties.put<T>( propertyPath, propertyValue );
+	}
 };

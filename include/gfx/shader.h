@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <glm/glm.hpp>
 
 #define SHADER_DEF_FILE "shaders.json"
 #define SHADER_COMPILE_LOG "compile.log"
@@ -25,6 +26,28 @@ struct ShaderProgramDefinition
 	std::vector<std::string> uniformNames;
 };
 
+/** Our uniform blocks are all hardcoded, the way to identify them can be found here. Must be continuous. */
+enum UniformBlockIDs
+{
+	UNIFORM_BLOCK_MATRIX = 0,
+	UNIFORM_BLOCK_COUNT
+};
+
+/** Defines a hard-coded uniform block */
+struct UniformBlockData
+{
+	const char*		blockName;
+	size_t			blockSize;
+
+	GLuint			uboId;
+	GLuint			uboBindingPoint;
+};
+
+/** Uniform block data, index corresponds to UniformBlockIDs value */
+static const UniformBlockData UniformBlocknames[] ={
+	{ "MatrixBlock", sizeof( glm::mat4 ) * 3 },
+};
+
 /**
 * @brief Shader service provider for all game objects.
 * @details This class manages all the shader objects in the game, and allows game objects to
@@ -40,6 +63,9 @@ private:
 	std::vector<std::shared_ptr<CShaderProgram>> m_shaderPrograms;
 	std::map<std::string, unsigned int> m_programIndexMap;
 
+	std::vector<UniformBlockData> m_uniformBlocks;
+	GLuint m_uboIndexCounter;
+
 	unsigned int m_boundProgramIndex;
 
 	/** Compiles the shader stages passed and stores them in temporary map m_shaderStageObjects */
@@ -47,6 +73,11 @@ private:
 
 	/** Takes the compiled stages and program definitions and links the programs, then stores them in m_shaderPrograms */
 	bool linkPrograms( const std::map<std::string, std::shared_ptr<CShaderStage>> &compiledStages, const std::vector<ShaderProgramDefinition> &programDefs );
+
+	/** Setup the global uniform blocks */
+	bool createUniformBlocks();
+	/** Cleanup the global uniform blocks */
+	void destroyUniformBlocks();
 public:
 	CShaderManager( CGame *pGameHandle );
 	~CShaderManager();
@@ -87,6 +118,19 @@ public:
 	* @returns Pointer to shader program class.
 	*/
 	std::shared_ptr<CShaderProgram> getProgramByIndex( unsigned int programIndex );
+
+	/**
+	* @brief Retrieves a reference to the global uniform block data.
+	* @returns A reference to the global uniform block data.
+	*/
+	inline std::vector<UniformBlockData>& getUniformBlockData() { return m_uniformBlocks; }
+
+	/**
+	* @brief Get a reference to a global uniform block's identifying information.
+	* @param[in]	blockIdentifier		The hardcoded block identifier
+	* @returns Reference to struct containing information on the uniform block
+	*/
+	UniformBlockData& getUniformBlock( UniformBlockIDs blockIdentifier );
 };
 
 /**

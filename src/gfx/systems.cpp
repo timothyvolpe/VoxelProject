@@ -11,6 +11,8 @@ CRenderSystem::CRenderSystem( CGame *pGameHandle, CECSCoordinator *pCoordinator 
 	m_pGameHandle = pGameHandle;
 	m_pCoordinatorHandle = pCoordinator;
 
+	m_modelMatUniformLoc = -1;
+
 	m_vertexArray = 0;
 	m_vertexBuffer = 0;
 }
@@ -22,17 +24,17 @@ bool CRenderSystem::initialize()
 {
 	// Get shader index
 	if( !m_pGameHandle->getClient()->getGraphics()->getShaderManager()->getProgramIndex( "simple", &m_simpleShaderIndex ) ) {
-		m_pGameHandle->getLogger()->print( "Failed to get simple shader program for client renderer." );
+		m_pGameHandle->getLogger()->printError( "Failed to get simple shader program for client renderer." );
 		return false;
 	}
 	m_simpleProgram = m_pGameHandle->getClient()->getGraphics()->getShaderManager()->getProgramByIndex( m_simpleShaderIndex );
 	// Get the mvpUniformLocation
-	size_t mvpMatIndex;
-	if( !m_simpleProgram->getUniformIndex( "MVPMatrix", &mvpMatIndex ) ) {
-		m_pGameHandle->getLogger()->print( "Failed to get MVPMatrix uniform location" );
+	size_t modelMatIndex;
+	if( !m_simpleProgram->getUniformIndex( "modelMatrix", &modelMatIndex ) ) {
+		m_pGameHandle->getLogger()->printError( "Failed to get modelMatrix uniform location" );
 		return false;
 	}
-	m_mvpUniformLocation = m_simpleProgram->getUniformLocation( mvpMatIndex );
+	m_modelMatUniformLoc = m_simpleProgram->getUniformLocation( modelMatIndex );
 	// Subscribe to uniform updates
 	m_simpleProgram->subscribeToUniformUpdate( std::bind( &CRenderSystem::updateShaderUniforms, this ) );
 
@@ -46,6 +48,9 @@ bool CRenderSystem::initialize()
 	m_viewMatrix = glm::lookAt( glm::vec3( 0.0f, 0.0f, -5.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ), glm::vec3( 0.0f, 1.0f, 0.0f ) );
 	m_modelMatrix = glm::translate( glm::mat4( 1.0f ), glm::vec3( 0.0f, 0.0f, 5.0f ) );
 	m_simpleProgram->requireUniformUpdate();
+
+	std::shared_ptr<glm::mat4> globalViewMatrix = m_pGameHandle->getClient()->getGraphics()->getViewMatrixPtr();
+	(*globalViewMatrix) = m_viewMatrix;
 
 	return true;
 }
@@ -73,10 +78,10 @@ bool CRenderSystem::onLoad()
 		Position3D pos = m_pCoordinatorHandle->getComponentManager()->GetComponent<Position3D>( it );
 		m_pGameHandle->getLogger()->print( "Coordinates for entity %d: (%f, %f, %f)", it, pos.x, pos.y, pos.z );
 
-		m_vertices.push_back( { glm::vec3( 0.5f, -0.5f, 0.0f ) + pos } );
-		m_vertices.push_back( { glm::vec3( 0.5f, 0.5f, 0.0f ) + pos } );
-		m_vertices.push_back( { glm::vec3( -0.5f, 0.5f, 0.0f ) + pos } );
-		m_vertices.push_back( { glm::vec3( -0.5f, -0.5f, 0.0f ) + pos } );
+		m_vertices.push_back( { glm::vec3( 1.f, -1.f, 0.0f ) + pos } );
+		m_vertices.push_back( { glm::vec3( 1.f, 1.f, 0.0f ) + pos } );
+		m_vertices.push_back( { glm::vec3( -1.f, 1.f, 0.0f ) + pos } );
+		m_vertices.push_back( { glm::vec3( -1.f, -1.f, 0.0f ) + pos } );
 	}
 
 	// Create vertex buffer objects
@@ -100,13 +105,12 @@ bool CRenderSystem::update( float deltaT )
 
 	}
 
-	m_pGameHandle->getClient()->getGraphics()->submitForDraw( m_vertexArray, m_simpleShaderIndex, m_vertices.size() );
+	m_pGameHandle->getClient()->getGraphics()->submitForDraw( m_vertexArray, m_simpleShaderIndex, (unsigned int)m_vertices.size() );
 
 	return true;
 }
 
 void CRenderSystem::updateShaderUniforms()
 {
-	glm::mat4 mvp = m_projectionMatrix * m_viewMatrix * m_modelMatrix;
-	glUniformMatrix4fv( m_mvpUniformLocation, 1, GL_FALSE, glm::value_ptr( mvp ) );
+	glUniformMatrix4fv( m_modelMatUniformLoc, 1, GL_FALSE, glm::value_ptr( m_modelMatrix ) );
 }
