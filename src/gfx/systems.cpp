@@ -2,9 +2,14 @@
 #include "gfx/systems.h"
 #include "gfx/graphics.h"
 #include "gfx/shader.h"
+#include "gfx/camera.h"
 #include "game.h"
 #include "logger.h"
 #include "client.h"
+
+///////////////////
+// CRenderSystem //
+///////////////////
 
 CRenderSystem::CRenderSystem( CGame *pGameHandle, CECSCoordinator *pCoordinator )
 {
@@ -15,6 +20,8 @@ CRenderSystem::CRenderSystem( CGame *pGameHandle, CECSCoordinator *pCoordinator 
 
 	m_vertexArray = 0;
 	m_vertexBuffer = 0;
+
+	m_testCamera = std::make_shared<CCamera>();
 }
 CRenderSystem::~CRenderSystem() {
 	this->shutdown();
@@ -44,13 +51,10 @@ bool CRenderSystem::initialize()
 
 	// Update uniforms once
 	float fovRad = glm::radians( 100.0f );
-	m_projectionMatrix = glm::perspective( 60.0f, 4.0f / 3.0f, 0.1f, 100.0f );
-	m_viewMatrix = glm::lookAt( glm::vec3( 0.0f, 0.0f, -5.0f ), glm::vec3( 0.0f, 0.0f, 1.0f ), glm::vec3( 0.0f, 1.0f, 0.0f ) );
-	m_modelMatrix = glm::translate( glm::mat4( 1.0f ), glm::vec3( 0.0f, 0.0f, 5.0f ) );
+	m_modelMatrix = glm::translate( glm::mat4( 1.0f ), glm::vec3( 0.0f, 0.0f, 0.0f ) );
 	m_simpleProgram->requireUniformUpdate();
 
-	std::shared_ptr<glm::mat4> globalViewMatrix = m_pGameHandle->getClient()->getGraphics()->getViewMatrixPtr();
-	(*globalViewMatrix) = m_viewMatrix;
+	m_pGameHandle->getClient()->getGraphics()->setActiveCamera( m_testCamera );
 
 	return true;
 }

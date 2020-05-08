@@ -81,7 +81,7 @@ bool CGame::startGame()
 	{
 		// Calculate time elapsed since last frame
 		m_currentTime = std::chrono::high_resolution_clock::now();
-		m_lastFrameTimeSeconds = std::chrono::duration_cast<std::chrono::microseconds>(m_currentTime - m_lastFrame).count() * 1000000.0f;
+		m_lastFrameTimeSeconds = std::chrono::duration_cast<std::chrono::microseconds>(m_currentTime - m_lastFrame).count() / 1000000.0f;
 		m_lastFrame = m_currentTime;
 
 		// Update server
@@ -92,7 +92,7 @@ bool CGame::startGame()
 			return false;
 
 		// Update logger last
-		m_pLogger->update( this->getFrameTime() );
+		m_pLogger->update( m_lastFrameTimeSeconds );
 
 		// Render
 		if( !m_pClient->render() )

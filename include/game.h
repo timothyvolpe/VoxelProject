@@ -13,8 +13,8 @@
 #include <atomic>
 
 #define GAME_VERSION_MAJOR 0
-#define GAME_VERSION_MINOR 1
-#define GAME_VERSION_BUILD 2
+#define GAME_VERSION_MINOR 2
+#define GAME_VERSION_BUILD 0
 
 class CLogger;
 class CFilesystem;

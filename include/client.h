@@ -16,6 +16,16 @@
 #define CONFIG_STR_FOV "FOV"
 #define CONFIG_STR_WINDOW_MODE "WindowMode"
 
+#define CONFIG_STR_KEYBOARD_FORWARD "KeyboardForward"
+#define CONFIG_STR_KEYBOARD_BACKWARD "KeyboardBackward"
+#define CONFIG_STR_KEYBOARD_STRAFELEFT "KeyboardStrafeLeft"
+#define CONFIG_STR_KEYBOARD_STRAFERIGHT "KeyboardStrafeRight"
+#define CONFIG_STR_KEYBOARD_RUN "KeyboardRun"
+#define CONFIG_STR_KEYBOARD_WALK "KeyboardWalk"
+
+#define CONFIG_STR_MOUSE_INVERTED "MouseInverted"
+#define CONFIG_STR_MOUSE_SENSITIVITY "MouseSensitivity"
+
 class CGame;
 class CGraphics;
 class CConfig;
@@ -78,6 +88,7 @@ public:
 	/**
 	* @brief Client update function.
 	* @details Handles updating all client entities and objects, should be run before rendering
+	* @param[in]	deltaT	The amount of time since the last update
 	* @return Returns true if the update was successful, false otherwise.
 	* @author Timothy Volpe
 	* @date 12/15/2019

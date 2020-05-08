@@ -6,6 +6,7 @@
 class CVertexArray;
 class CBufferObject;
 class CShaderProgram;
+class CCamera;
 
 struct Vertex3D
 {
@@ -24,7 +25,9 @@ private:
 	std::vector<Vertex3D> m_vertices;
 
 	unsigned int m_modelMatUniformLoc;
-	glm::mat4 m_projectionMatrix, m_viewMatrix, m_modelMatrix;
+	glm::mat4 m_modelMatrix;
+
+	std::shared_ptr<CCamera> m_testCamera;
 public:
 	CRenderSystem( CGame *pGameHandle, CECSCoordinator *pCoordinator );
 	~CRenderSystem();

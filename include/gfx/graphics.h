@@ -34,6 +34,7 @@
 class CGame;
 class CShaderManager;
 class CVertexArray;
+class CCamera;
 
 /**
 * @brief Defines which feature sets are support on the client computer
@@ -103,6 +104,8 @@ private:
 	glm::mat4 m_projectionPerspMat, m_projectionOrthoMat;
 	std::shared_ptr<glm::mat4> m_viewMat;
 
+	std::shared_ptr<CCamera> m_activeCamera;
+
 	bool m_viewportOutOfDate;
 
 	/**
@@ -150,6 +153,13 @@ public:
 	void destroy();
 
 	/**
+	* @brief Update the graphics objects, this does not update entities.
+	* @details This updates rendering buffers and the camera position, and is performed before the draw.
+	* @param[in]	 deltaT		Time since last update
+	* @returns True if successfully updated, false if failed to update the viewport.
+	*/
+	bool update( float deltaT );
+	/**
 	* @brief Draw the next frame.
 	* @details Performs the necessary OpenGL/SDL steps to draw a frame, as well as notify all the 
 	* rendering classes that it is time to draw.
@@ -189,6 +199,12 @@ public:
 	* @returns A shared pointer to the view matrix.
 	*/
 	inline std::shared_ptr<glm::mat4> getViewMatrixPtr() { return m_viewMat; }
+
+	/**
+	* @brief Sets the active camera to render from.
+	* @param[in]	camera	A pointer to the camera to use as the rendering orientation.
+	*/
+	inline void setActiveCamera( std::shared_ptr<CCamera> camera ) { m_activeCamera = camera; }
 };
 
 enum OpenGLBufferTypes : uint16_t

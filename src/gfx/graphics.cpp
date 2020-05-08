@@ -2,6 +2,7 @@
 #include <glm/ext.hpp>
 #include "gfx\graphics.h"
 #include "gfx\shader.h"
+#include "gfx\camera.h"
 #include "game.h"
 #include "logger.h"
 #include "config.h"
@@ -38,6 +39,8 @@ CGraphics::CGraphics( CGame *pGameHandle )
 	m_projectionPerspMat = glm::mat4( 1.0f );
 	m_projectionOrthoMat = glm::mat4( 1.0f );
 	m_viewMat = std::make_shared<glm::mat4>( 1.0f );
+
+	m_activeCamera = 0;
 
 	m_viewportOutOfDate = true;
 }
@@ -122,6 +125,9 @@ bool CGraphics::initialize()
 	}
 	SDL_GL_MakeCurrent( m_pSDLWindow, m_sdlContext );
 
+	// Trap the mouse
+	SDL_SetRelativeMouseMode( SDL_TRUE );
+
 	// Initialize GLEW
 	m_pGameHandle->getLogger()->print( "Initializing GLEW..." );
 	if( !CGraphics::GLEWInitialized )
@@ -191,8 +197,14 @@ bool CGraphics::initialize()
 	return true;
 }
 
-bool CGraphics::draw()
+bool CGraphics::update( float deltaT )
 {
+	// Update active camera if needed
+	if( m_activeCamera ) {
+		m_activeCamera->updateInput( m_pGameHandle->getClient()->getInputHandler() );
+		m_activeCamera->update( deltaT );
+		(*m_viewMat) = m_activeCamera->getViewMatrix();
+	}
 	// Update viewport if needed
 	if( m_viewportOutOfDate ) {
 		if( !this->setupViewport() )
@@ -210,6 +222,10 @@ bool CGraphics::draw()
 	glBufferSubData( GL_UNIFORM_BUFFER, 0, sizeof( matrixBlock ), &matrixBlock[0] );
 	glBindBuffer( GL_UNIFORM_BUFFER, 0 );
 
+	return true;
+}
+bool CGraphics::draw()
+{
 	// Clear screen
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 

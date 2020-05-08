@@ -118,7 +118,7 @@ void CServer::shutdownServer()
 bool CServer::serverUpdate()
 {
 	m_currentTime = std::chrono::high_resolution_clock::now();
-	m_lastUpdateTimeSeconds = std::chrono::duration_cast<std::chrono::microseconds>(m_currentTime - m_lastUpdate).count() * 1000000.0f;
+	m_lastUpdateTimeSeconds = std::chrono::duration_cast<std::chrono::microseconds>(m_currentTime - m_lastUpdate).count() / 1000000.0f;
 	m_lastUpdate = m_currentTime;
 
 	m_pWorld->updateWorld( m_lastUpdateTimeSeconds );

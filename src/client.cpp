@@ -36,6 +36,7 @@ bool CClient::initialize()
 		return false;
 
 	m_pUserInput = new CUserInput();
+	m_pUserInput->loadKeybinds( m_pClientConfig );
 
 	m_pWorldRenderer->createClientEntity( ComponentSignature(), &testEntity );
 	if( !testEntity ) {
@@ -89,6 +90,16 @@ bool CClient::loadConfig()
 	clientConfig.put<float>( CONFIG_STR_FOV, DEFAULT_FOV );
 	clientConfig.put<int>( CONFIG_STR_WINDOW_MODE, DEFAULT_WINDOW_MODE );
 
+	clientConfig.put<int>( CONFIG_STR_KEYBOARD_FORWARD, DEFAULT_KEYBIND_FORWARD );
+	clientConfig.put<int>( CONFIG_STR_KEYBOARD_BACKWARD, DEFAULT_KEYBIND_BACKWARD );
+	clientConfig.put<int>( CONFIG_STR_KEYBOARD_STRAFELEFT, DEFAULT_KEYBIND_STRAFE_LEFT );
+	clientConfig.put<int>( CONFIG_STR_KEYBOARD_STRAFERIGHT, DEFAULT_KEYBIND_STRAFE_RIGHT );
+	clientConfig.put<int>( CONFIG_STR_KEYBOARD_RUN, DEFAULT_KEYBIND_RUN );
+	clientConfig.put<int>( CONFIG_STR_KEYBOARD_WALK, DEFAULT_KEYBIND_WALK );
+
+	clientConfig.put<bool>( CONFIG_STR_MOUSE_INVERTED, false );
+	clientConfig.put<float>( CONFIG_STR_MOUSE_SENSITIVITY, DEFAULT_MOUSE_SENSITIVITY );
+
 	if( !m_pClientConfig->loadConfig( "client.cfg", clientConfig ) )
 		return false;
 
@@ -112,6 +123,9 @@ void CClient::handleSDLEvents()
 		case SDL_KEYUP:
 			m_pUserInput->signalKeyUp( &sdlEvent );
 			break;
+		case SDL_MOUSEMOTION:
+			m_pUserInput->signalMouseMove( &sdlEvent );
+			break;
 		default:
 			break;
 		}
@@ -131,6 +145,10 @@ bool CClient::update()
 
 	// Update the client sided entities
 	m_pWorldRenderer->update( m_pGameHandle->getFrameTime() );
+
+	// Update graphics objects such as camera
+	if( !m_pGraphics->update( m_pGameHandle->getFrameTime() ) )
+		return false;
 
 	return true;
 }
